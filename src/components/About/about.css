@@ -1,0 +1,144 @@
+.aboutSecHeadingOuter{
+    overflow: hidden;
+    max-width: 100%;
+}
+.aboutSecHeading{
+    margin-top: 8%;
+    display: flex;
+    position: absolute;
+    left: 0;
+}
+.filledHeading{
+    color: #EEE7DA !important;
+}
+.aboutSecHeading li{
+    font-family: 'Roseritta', sans-serif;
+    font-size: 6em;
+    list-style: none;
+    color: transparent;
+    margin: 5px;
+    -webkit-text-stroke: 0.3px #EEE7DA;
+}
+.introSec{
+    display: flex;
+    justify-content: center;
+    text-align: center;
+    padding: 10%;
+    margin-top: 25%;
+}
+
+.sectionTitle{
+    position: absolute;
+    font-family: 'Roseritta', sans-serif;
+    width: 25%;
+    margin-top: -5%;
+    font-size: 5em;
+    color: rgba(105, 105, 105, 0.5);
+}
+.titleIntro{
+    text-align: left;
+    left: 0;
+}
+.profileImage{
+    position: absolute;
+    margin-top: -15%;
+    right: -100px;
+    height: 550px;
+    /* background-color: #eee7da10; */
+    border-radius: 25px;
+}
+
+.introSecText{
+    width: 40%;
+    margin: 0 5%;
+    padding: 2% 0;
+    text-align: justify;
+    /* border-bottom: 1px solid #EEE7DA; */
+}
+.introSecText::before{
+    content: "";
+
+}
+.introSecText p{
+    tab-size: 8;
+    margin: 0;
+    font-size: 0.9em;
+    font-weight: 200;
+    color: #EEE7DA;
+}
+
+.curve{
+    margin-top: -20%;
+    height: 700px;
+    width: 100%;
+}
+.curveCon1{
+    height: 350px;
+    width: 100%;
+    text-align: left;
+}
+.curve1{
+    height: 350px;
+    width: 50%;
+    overflow: hidden;
+}
+
+.curveLine1{
+    border: 2px solid #EEE7DA;
+    width: 200%;
+    height: 350px;
+    border-radius: 50%;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    margin-left: 15%;
+}
+.curveCon2{
+    height: 350px;
+    width: 100%;
+    text-align: right;
+    margin-top: -5.5px;
+}
+.curve2{
+    height: 350px;
+    width: 50%;
+    overflow: hidden;
+    position: absolute;
+    right:0;
+    text-align: right;
+}
+.curveLine2{
+    border: 2px solid #EEE7DA;
+    width: 200%;
+    height: 350px;
+    border-radius: 50%;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    position: absolute;
+    right: 15%;
+}
+
+.skillSec{
+    margin-top: -10%;
+    padding: 10%;
+}
+.titleSkill{
+    text-align: right;
+    right: 0;
+}
+.skillCon{
+    display: flex;
+    flex-wrap: wrap;
+    width: 70%;
+    margin-top: -5%;
+}
+.skillCon li{
+    font-size: 0.9em;
+    font-weight: 200;
+    list-style: none;
+    padding: 1% 3%;
+    border: 1px solid rgba(238, 231, 218, 0.1);
+    border-radius: 50px;
+    margin: 2%;
+}

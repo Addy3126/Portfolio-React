@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&family=Questrial&display=swap');
+@font-face {
+    font-family: 'Roseritta';
+    src: url('https://addy3126.github.io/Portfolio/font/Roseritta.ttf') format('truetype');
+}
+*{
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+}
+::-webkit-scrollbar{
+    display: none;
+}
+::selection{
+    background-color: #EEE7DA;
+    color: #191919;
+}
+.userSelectNone{
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10 and IE 11 */
+    user-select: none; /* Standard syntax */
+}
+html{
+    cursor: none; /*removes cursor on webpage */
+    -webkit-font-smoothing: antialiased;
+}
+body{
+    background: #191919;
+    color: #EEE7DA;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    font-family: 'Poppins',sans-serif;
+}
+
+.square{
+    position: absolute;
+    transform: rotate(-45deg) translate(-50%,-50%);
+    background: linear-gradient(to bottom left, rgba(105, 105, 105, 0.2), transparent 40%);
+}
+.s1{
+    height: 400px;
+    width: 400px;
+    top: 50%;
+    left: 60%;
+}
+.s2{
+    height: 200px;
+    width: 200px;
+    top: 10%;
+    right: 20%;
+    transform: rotate(135deg);
+}
+.cursorCustom{
+    background-color: transparent;
+    width: 40px;
+    height: 40px;
+    border: #EEE7DA 2px solid;
+    border-radius: 50%;
+    mix-blend-mode: difference;
+    pointer-events: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    transition: background-color 100ms ease, height 300ms ease, width 300ms ease;
+}

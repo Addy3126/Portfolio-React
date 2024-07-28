@@ -1,0 +1,21 @@
+.header{
+    position: absolute;
+    display: flex;
+    justify-content: space-between;
+    width: 80%;
+    z-index: 3;
+    font-size: 1em;
+    color:#EEE7DA;
+    font-weight: 200;
+    padding: 1em 2em;
+}
+.headerItem ul{
+    list-style-type: none;
+}
+.headerItem li:nth-child(1){
+    color: #EEE7DA7D !important;
+}
+body:has(.headerItem:hover) .cursorCustom{
+    background-color: #EEE7DA;
+    mix-blend-mode: difference;
+}

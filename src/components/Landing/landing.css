@@ -1,0 +1,21 @@
+.name_sec{
+    position: relative;
+    padding: 10%;
+    color: #EEE7DA;
+    list-style-type: none;
+}
+.name_mainText{
+    font-size: 6.5em;
+    width: 50%;
+    font-family: 'Roseritta', sans-serif;
+}
+.nameMainTextHollow{
+    display: inline;
+    /* -webkit-text-stroke: 0.5px #EEE7DA; */
+    color: #eee7da7d;
+    /* color: transparent; */
+}
+
+.name_sec h2{
+    font-weight: 200;
+}

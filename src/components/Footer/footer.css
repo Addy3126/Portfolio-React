@@ -1,0 +1,13 @@
+.footercon{
+    position: relative;
+    text-align: center;
+    overflow: hidden;
+    height:9.5em;
+    background-color: #191919;
+    z-index: 9;
+}
+.footername{
+    color: #eee7da19;
+    font-size: 14em;
+    font-family: 'Roseritta', sans-serif;
+}
