@@ -2,13 +2,6 @@ import React from 'react'
 import './about.css'
 import profileImg from '../../assets/poly.png'
 
-// About Section Heading - Horizontal Scroll => Direction: Left
-let aSh = document.querySelector(".aboutSecHeading");
-window.onscroll = () =>{
-  let pos = window.scrollY;
-  aSh.style.left = `-${pos}px`;
-};
-
 const About = () => {
     return (
         <div className="about">

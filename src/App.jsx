@@ -5,11 +5,6 @@ import About from './components/About/about';
 import Footer from './components/Footer/footer';
 import Projects from './components/Projects/projects';
 
- //Nav Links
- document.querySelector('#about').addEventListener('click', function(){
-    document.querySelector('.aboutSecHeading').scrollIntoView(true);
-  });
-
 function App() {
   return (
     <div className="App">

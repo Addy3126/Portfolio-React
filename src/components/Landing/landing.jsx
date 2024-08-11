@@ -1,11 +1,5 @@
 import React from 'react';
 import './landing.css';
-import $ from 'jquery';
-
-//  Landing Page Content Fade Out
-$(window).scroll(function(){
-  $(".fadeoutLanding").css("opacity", 1 - $(window).scrollTop()/400);
-});
 
 const Landing = () => {
   return (
