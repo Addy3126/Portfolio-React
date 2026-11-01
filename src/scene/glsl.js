@@ -60,13 +60,3 @@ float pianoContact(vec2 xz){
   return (1.0 - 0.45 * (1.0 - smoothstep(0.55, 1.35, e))) * (1.0 - 0.3 * (1.0 - smoothstep(0.6, 1.4, bench)));
 }
 `
-
-// Low-lying mist over the water: thicker near the surface and with distance.
-export const mistGLSL = /* glsl */ `
-vec3 applyMist(vec3 col, float dist, vec3 V, float y){
-  float amount = (1.0 - exp(-dist * 0.0022)) * exp(-max(y, 0.0) * 0.12) * 0.3;
-  float sd = max(dot(V, uSunDir), 0.0);
-  vec3 mc = mix(uFogColor, uFogGlow, pow(sd, 8.0) * 0.6);
-  return mix(col, mc, clamp(amount, 0.0, 1.0));
-}
-`

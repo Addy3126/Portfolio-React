@@ -1,4 +1,4 @@
-// Three looks for the same piano model. Pick one with ?piano=a|b|c (default a).
+// Three looks for the same piano model. Pick one with ?piano=a|b|c (default c, Nocturne).
 export const DESIGNS = {
   a: {
     name: 'Concert',
@@ -30,5 +30,5 @@ export const DESIGNS = {
 }
 
 const key = new URLSearchParams(window.location.search).get('piano')
-export const designKey = DESIGNS[key] ? key : 'a'
+export const designKey = DESIGNS[key] ? key : 'c'
 export const design = DESIGNS[designKey]

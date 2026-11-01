@@ -46,7 +46,7 @@ export const shared = {
   uSunDir: { value: SUN_DIR },
   uFogColor: { value: c(palette.fog) },
   uFogGlow: { value: c(palette.glow) },
-  uFogDensity: { value: 0.0042 },
+  uFogDensity: { value: 0.0011 }, // ~5% at the towers, ~90% at the far edge of the sea
   uPianoPos: { value: PIANO_POS.clone().add(new THREE.Vector3(1.1, 0, 0)) },
   uPianoGlow: { value: c(palette.pianoGlow) },
   uGlowPulse: { value: 1 },

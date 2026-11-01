@@ -16,7 +16,7 @@ void main(){
 const fragment = /* glsl */ `
 uniform float uTime;
 uniform vec3 uSunDir;
-uniform vec3 cZenith, cUpper, cMid, cHorizon, cGlow, cCloud, cCloudLit, cAurora1, cAurora2, cFog;
+uniform vec3 cZenith, cUpper, cMid, cHorizon, cGlow, cCloud, cCloudLit, cFog;
 varying vec3 vDir;
 ${noiseGLSL}
 
@@ -46,15 +46,6 @@ void main(){
   star *= 0.55 + 0.45 * sin(uTime * (1.0 + r * 3.0) + r * 60.0);
   col += vec3(0.85, 0.85, 1.0) * star * smoothstep(0.08, 0.35, h) * (1.0 - pow(sd, 3.0));
 
-  // Aurora: vertical curtains that fold and drift sideways.
-  float az = atan(d.x, -d.z);
-  float fold = vnoise(vec2(az * 2.5 + uTime * 0.015, 3.0));
-  float streak = vnoise(vec2(az * 70.0 + fold * 9.0 + uTime * 0.04, 1.7));
-  streak = spow(streak, 2.5) * (0.5 + 0.8 * vnoise(vec2(az * 9.0 - uTime * 0.03, h * 5.0)));
-  float hMask = smoothstep(0.22, 0.42, h) * (1.0 - smoothstep(0.55, 0.92, h));
-  float azMask = smoothstep(-1.05, -0.55, az) * (1.0 - smoothstep(0.55, 1.05, az));
-  vec3 acol = mix(cAurora1, cAurora2, smoothstep(0.35, 0.8, h));
-  col += acol * streak * hMask * azMask * (0.35 + 0.8 * fold) * 0.9;
 
   // Clouds: fbm on a flat sky plane, banked low around the horizon.
   if (h > -0.02) {
@@ -99,8 +90,6 @@ export function makeSkyMaterial() {
       cGlow: { value: color(palette.glow) },
       cCloud: { value: color(palette.cloud) },
       cCloudLit: { value: color(palette.cloudLit) },
-      cAurora1: { value: color(palette.aurora1) },
-      cAurora2: { value: color(palette.aurora2) },
       cFog: { value: shared.uFogColor.value },
     },
   })

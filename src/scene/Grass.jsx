@@ -33,6 +33,32 @@ const hash = (i, j, k) => {
   return v - Math.floor(v)
 }
 
+// Value noise / fbm in JS, evaluated once per blade at load (was per vertex, per frame).
+function vnoise(x, y) {
+  const xi = Math.floor(x)
+  const yi = Math.floor(y)
+  const xf = x - xi
+  const yf = y - yi
+  const u = xf * xf * (3 - 2 * xf)
+  const v = yf * yf * (3 - 2 * yf)
+  const a = hash(xi, yi, 9)
+  const b = hash(xi + 1, yi, 9)
+  const c = hash(xi, yi + 1, 9)
+  const d = hash(xi + 1, yi + 1, 9)
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v
+}
+function fbm(x, y) {
+  let v = 0
+  let a = 0.5
+  for (let i = 0; i < 5; i++) {
+    v += a * vnoise(x, y)
+    x = x * 2.03 + 17.1
+    y = y * 2.03 + 9.2
+    a *= 0.5
+  }
+  return v
+}
+
 // Nearest clump centre to (x, z) and that clump's traits.
 function nearestClump(x, z) {
   const ci = Math.floor(x / CLUMP_CELL)
@@ -57,6 +83,7 @@ const vertex = /* glsl */ `
 attribute vec3 iOffset;
 attribute vec4 iParams; // yaw, height, width, random
 attribute vec2 iClump;  // clump tone, distance from clump centre (0..1)
+attribute vec3 iPatch;  // large-scale patches: frost, dark hollow, blue tint
 uniform float uTime;
 uniform float uMotion;
 uniform vec2 uCursor;
@@ -108,9 +135,7 @@ void main(){
   w.y -= part * part * t * t * hgt * 0.45;
   n.xz += pushDir * part * 0.8;
 
-  // Large-scale patches: x = frost, y = dark hollow, z = blue tint.
-  vec2 pp = iOffset.xz;
-  vPatch = vec3(fbm(pp * 0.09 + 3.0), vnoise(pp * 0.16 - 7.0), vnoise(pp * 0.05 + 11.0));
+  vPatch = iPatch;
 
   vWorld = w;
   vNormal = normalize(n);
@@ -199,6 +224,7 @@ export default function Grass({ count, layer = 'near' }) {
     const offsets = new Float32Array(count * 3)
     const params = new Float32Array(count * 4)
     const clumps = new Float32Array(count * 2)
+    const patches = new Float32Array(count * 3)
     let n = 0
     let guard = 0
     while (n < count && guard++ < count * 30) {
@@ -234,11 +260,13 @@ export default function Grass({ count, layer = 'near' }) {
       offsets.set([x, 0, z], n * 3)
       params.set([yaw, height, width, Math.random()], n * 4)
       clumps.set([clump.tone, rel], n * 2)
+      patches.set([fbm(x * 0.09 + 3, z * 0.09 + 3), vnoise(x * 0.16 - 7, z * 0.16 - 7), vnoise(x * 0.05 + 11, z * 0.05 + 11)], n * 3)
       n++
     }
     g.setAttribute('iOffset', new THREE.InstancedBufferAttribute(offsets, 3))
     g.setAttribute('iParams', new THREE.InstancedBufferAttribute(params, 4))
     g.setAttribute('iClump', new THREE.InstancedBufferAttribute(clumps, 2))
+    g.setAttribute('iPatch', new THREE.InstancedBufferAttribute(patches, 3))
     g.instanceCount = n
     return g
   }, [count, layer])

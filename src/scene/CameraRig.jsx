@@ -41,7 +41,7 @@ function shot(i, portrait) {
 export default function CameraRig() {
   const parallax = useRef({ x: 0, y: 0 })
 
-  useFrame(({ camera, size, clock }) => {
+  useFrame(({ camera, size, clock }, dt) => {
     const aspect = size.width / size.height
     const portrait = aspect < 1
     const fov = aspect < 1 ? 62 : aspect < 1.6 ? 50 : 42
@@ -63,8 +63,9 @@ export default function CameraRig() {
 
     if (!reducedMotion) {
       const px = parallax.current
-      px.x += (motion.pointerX - px.x) * 0.06
-      px.y += (motion.pointerY - px.y) * 0.06
+      const k = 1 - Math.exp(-Math.min(dt, 0.1) * 3.7) // same feel at any frame rate
+      px.x += (motion.pointerX - px.x) * k
+      px.y += (motion.pointerY - px.y) * k
       right.subVectors(tmpLook, tmpPos).cross(up).normalize()
       const sway = Math.sin((clock.elapsedTime * Math.PI * 2) / 14) * 0.05
       tmpPos.addScaledVector(right, px.x * 0.25 + sway)

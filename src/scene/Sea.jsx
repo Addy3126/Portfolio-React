@@ -2,7 +2,6 @@ import { useEffect, useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js'
-import { quality } from '../quality'
 import { fogGLSL, noiseGLSL, shoreGLSL } from './glsl'
 import { color, hideInReflection, palette, shared } from './world'
 
@@ -187,9 +186,9 @@ function seaGeometry(cols = 220, rows = 200) {
   return g
 }
 
-export default function Sea() {
+export default function Sea({ reflection = 0 }) {
   const { size, viewport } = useThree()
-  const scale = quality.reflection
+  const scale = reflection
 
   const mesh = useMemo(() => {
     const geometry = seaGeometry()

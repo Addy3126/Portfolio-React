@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { fogGLSL, mistGLSL } from './glsl'
+import { fogGLSL } from './glsl'
 import { color, palette, shared } from './world'
 
 // Towers out on the water. `project` links a tower to an entry in content.projects.
@@ -53,7 +53,6 @@ uniform vec3 cSkyR;
 varying vec3 vWorld;
 varying vec3 vNormalW;
 ${fogGLSL}
-${mistGLSL}
 void main(){
   vec3 toP = vWorld - cameraPosition;
   float dist = length(toP);
@@ -62,9 +61,7 @@ void main(){
   vec3 col = uColor * (0.55 + 0.45 * (N.y * 0.5 + 0.5)) + cSkyR * max(N.y, 0.0) * 0.08;
   float rim = pow(max(1.0 - abs(dot(N, -V)), 0.0), 3.0) * pow(max(dot(V, uSunDir), 0.0), 4.0);
   col += uFogGlow * rim * 0.35;
-  // Lighter haze than the field gets, so silhouettes stay dark against the glow.
-  col = applyMist(col, dist * 0.7, V, vWorld.y);
-  gl_FragColor = vec4(applyFog(col, dist * 0.6, V), 1.0);
+  gl_FragColor = vec4(applyFog(col, dist, V), 1.0);
 }
 `
 const ruinMaterial = (hex) =>
@@ -87,14 +84,11 @@ const windowFragment = /* glsl */ `
 uniform vec3 uColor;
 varying vec3 vWorld;
 ${fogGLSL}
-${mistGLSL}
 void main(){
   vec3 toP = vWorld - cameraPosition;
   float dist = length(toP);
   vec3 V = toP / dist;
-  // Lit windows punch through the haze a little more than stone does.
-  vec3 col = applyMist(uColor, dist * 0.6, V, vWorld.y);
-  gl_FragColor = vec4(applyFog(col, dist * 0.75, V), 1.0);
+  gl_FragColor = vec4(applyFog(uColor, dist, V), 1.0);
 }
 `
 const DIM = color('#26306e')
