@@ -3,7 +3,7 @@ import { Canvas, useFrame } from '@react-three/fiber'
 import { Bloom, EffectComposer, Noise, ToneMapping, Vignette } from '@react-three/postprocessing'
 import { BlendFunction, ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
-import { quality } from '../quality'
+import { bloomEnabled, quality } from '../quality'
 import CameraRig from './CameraRig'
 import Grass from './Grass'
 import Ground from './Ground'
@@ -51,7 +51,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       <Piano />
 
       <EffectComposer multisampling={quality.multisampling} frameBufferType={THREE.HalfFloatType}>
-        <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.82} luminanceSmoothing={0.25} />
+        {bloomEnabled && <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.82} luminanceSmoothing={0.25} />}
         <ToneMapping mode={ToneMappingMode.NEUTRAL} />
         <Vignette offset={0.3} darkness={0.55} />
         <Noise opacity={0.035} blendFunction={BlendFunction.OVERLAY} />

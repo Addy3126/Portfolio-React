@@ -69,16 +69,17 @@ uniform float uGlowPulse;
 varying float vT;
 varying float vRand;
 varying vec3 vWorld;
+float spow(float x, float e){ return pow(max(x, 0.0), e); }
 ${fogGLSL}
 void main(){
   vec3 toP = vWorld - cameraPosition;
   float dist = length(toP);
   vec3 V = toP / dist;
-  vec3 col = mix(cBase, cTip, smoothstep(0.0, 0.85, vT));
+  vec3 col = mix(cBase, cTip, smoothstep(0.0, 0.85, clamp(vT, 0.0, 1.0)));
   col *= 0.55 + 0.7 * vRand;
   // Frosted tips, glowing when backlit by the sun.
   float back = pow(max(dot(V, uSunDir), 0.0), 4.0);
-  col += cFrost * pow(vT, 2.6) * (0.16 + 1.0 * back);
+  col += cFrost * spow(vT, 2.6) * (0.16 + 1.0 * back);
   // Blue spill from the piano.
   float pd = length(vWorld.xz - uPianoPos.xz);
   col += uPianoGlow * uGlowPulse * (0.25 + vT) * 0.55 / (1.0 + pd * pd * 0.9);

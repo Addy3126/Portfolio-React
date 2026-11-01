@@ -16,6 +16,7 @@ function pickTier() {
 
 export const tier = pickTier()
 export const quality = TIERS[tier]
+export const bloomEnabled = new URLSearchParams(window.location.search).get('bloom') !== '0'
 export const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 export function hasWebGL() {

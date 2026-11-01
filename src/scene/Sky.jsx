@@ -9,7 +9,7 @@ varying vec3 vDir;
 void main(){
   vDir = position;
   vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  gl_Position = p.xyww; // pin to the far plane
+  gl_Position = vec4(p.xy, p.w * 0.99995, p.w); // just inside the far plane
 }
 `
 
@@ -42,7 +42,7 @@ void main(){
   vec2 sp = d.xz / (d.y + 0.35) * 140.0;
   vec2 id = floor(sp);
   float r = hash12(id);
-  float star = step(0.986, r) * smoothstep(0.12, 0.0, length(fract(sp) - 0.5));
+  float star = step(0.986, r) * (1.0 - smoothstep(0.0, 0.12, length(fract(sp) - 0.5)));
   star *= 0.55 + 0.45 * sin(uTime * (1.0 + r * 3.0) + r * 60.0);
   col += vec3(0.85, 0.85, 1.0) * star * smoothstep(0.08, 0.35, h) * (1.0 - pow(sd, 3.0));
 
@@ -50,7 +50,7 @@ void main(){
   float az = atan(d.x, -d.z);
   float fold = vnoise(vec2(az * 2.5 + uTime * 0.015, 3.0));
   float streak = vnoise(vec2(az * 70.0 + fold * 9.0 + uTime * 0.04, 1.7));
-  streak = pow(streak, 2.5) * (0.5 + 0.8 * vnoise(vec2(az * 9.0 - uTime * 0.03, h * 5.0)));
+  streak = spow(streak, 2.5) * (0.5 + 0.8 * vnoise(vec2(az * 9.0 - uTime * 0.03, h * 5.0)));
   float hMask = smoothstep(0.22, 0.42, h) * (1.0 - smoothstep(0.55, 0.92, h));
   float azMask = smoothstep(-1.05, -0.55, az) * (1.0 - smoothstep(0.55, 1.05, az));
   vec3 acol = mix(cAurora1, cAurora2, smoothstep(0.35, 0.8, h));
@@ -72,7 +72,7 @@ void main(){
 
   // Below the horizon: blend into the fog colour the far sea fades to.
   vec3 below = mix(cFog, cGlow, pow(sd, 8.0) * 0.7);
-  col = mix(col, below, smoothstep(0.0, -0.01, h));
+  col = mix(col, below, 1.0 - smoothstep(-0.01, 0.0, h));
 
   // Sun disc (HDR so bloom picks it up).
   float disc = smoothstep(0.99955, 0.99975, sd) * smoothstep(-0.004, 0.003, h);
