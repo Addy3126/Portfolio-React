@@ -26,14 +26,16 @@ const FLAP_X = 0.37 // where the front lid flap hinges
 const KEY_W = 1.22 / 52
 const KEY_Z0 = -0.61
 
+// Roughness stays >= 0.1: below that, a sun highlight overflows the half-float frame
+// buffer (max 65504) and turns into an infinite pixel (black specks / bloom flicker).
 const FINISHES = {
-  white: { color: '#f1eef6', roughness: 0.12 },
-  black: { color: '#0b0a10', roughness: 0.07 },
-  pearl: { color: '#ebe8f8', roughness: 0.1 },
+  white: { color: '#f1eef6', roughness: 0.14 },
+  black: { color: '#0b0a10', roughness: 0.12 },
+  pearl: { color: '#ebe8f8', roughness: 0.12 },
 }
 
 export function pianoMaterials(d) {
-  const lacquer = new THREE.MeshPhysicalMaterial({ ...FINISHES[d.finish], clearcoat: 1, clearcoatRoughness: 0.03 })
+  const lacquer = new THREE.MeshPhysicalMaterial({ ...FINISHES[d.finish], clearcoat: 1, clearcoatRoughness: 0.1 })
   return {
     lacquer,
     brass: new THREE.MeshStandardMaterial({ color: '#caa45a', metalness: 1, roughness: 0.28 }),
@@ -41,7 +43,7 @@ export function pianoMaterials(d) {
     soundboard: new THREE.MeshStandardMaterial({ color: '#b88d55', roughness: 0.55 }),
     underside: new THREE.MeshStandardMaterial({ color: '#17141c', roughness: 0.85 }),
     ivory: new THREE.MeshStandardMaterial({ color: '#f3efe6', roughness: 0.32 }),
-    ebony: new THREE.MeshPhysicalMaterial({ color: '#08080b', roughness: 0.22, clearcoat: 0.6 }),
+    ebony: new THREE.MeshPhysicalMaterial({ color: '#08080b', roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.12 }),
     redFelt: new THREE.MeshStandardMaterial({ color: '#6e1424', roughness: 1 }),
     blackFelt: new THREE.MeshStandardMaterial({ color: '#121016', roughness: 1 }),
     steel: new THREE.MeshStandardMaterial({ color: '#d8dbe4', metalness: 1, roughness: 0.3 }),

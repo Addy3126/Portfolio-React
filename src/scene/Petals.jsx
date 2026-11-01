@@ -83,7 +83,7 @@ void main(){
 export default function Petals({ count }) {
   const geometry = useMemo(() => {
     // Low-poly lily: these are small and moving, so ~1/3 of the full model's triangles is plenty.
-    const g = toInstanced(lilyGeometry({ nv: 5, nu: 3 }))
+    const g = toInstanced(lilyGeometry({ detail: 'low' }))
     const a = new Float32Array(count * 4)
     const b = new Float32Array(count * 4)
     for (let i = 0; i < count * 4; i++) {

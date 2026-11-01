@@ -48,7 +48,7 @@ float pianoShadow(vec3 wp){
   float r = 1.0 / 512.0;
   for (int i = -2; i <= 2; i++) {
     for (int j = -2; j <= 2; j++) {
-      float d = texture2D(uShadowMap, c.xy + vec2(float(i), float(j)) * r).r;
+      float d = textureLod(uShadowMap, c.xy + vec2(float(i), float(j)) * r, 0.0).r;
       lit += (c.z - 0.003 > d) ? 0.0 : 1.0;
     }
   }
