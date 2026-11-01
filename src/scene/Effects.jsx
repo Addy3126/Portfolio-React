@@ -20,8 +20,13 @@ class SanitizeEffect extends Effect {
       void mainUv(inout vec2 uv) {}
       void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
         vec3 c = inputColor.rgb;
-        bool bad = any(isnan(c)) || any(isinf(c));
-        outputColor = vec4(bad ? vec3(0.0) : min(c, vec3(12.0)), bad ? 1.0 : inputColor.a); // cap also tames lacquer fireflies
+        // NaN -> black; overflowed (infinite) highlights -> capped bright, not black.
+        c = any(isnan(c)) ? vec3(0.0) : c;
+        // On Windows (ANGLE/Direct3D) the compiler may drop isnan(); there, min/max
+        // return the non-NaN operand, so this clamp removes NaN as well. The upper cap
+        // also tames lacquer fireflies.
+        c = min(max(c, vec3(0.0)), vec3(12.0));
+        outputColor = vec4(c, 1.0);
       }`,
     )
   }
