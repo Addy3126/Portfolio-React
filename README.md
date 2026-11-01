@@ -18,13 +18,13 @@ Every push to `main` builds the site and publishes it to GitHub Pages (`.github/
 
 ## Editing content
 
-All text lives in `src/content.js`. Entries marked `PLACEHOLDER` are waiting for real content. Each project in `projects` is attached to one lit tower (see `TOWERS` in `src/scene/Ruins.jsx`).
+All text lives in `src/content.js`. Each project in `projects` is attached to one lit tower (see `TOWERS` in `src/scene/Ruins.jsx`); a project's `link` is optional (use `note` for private work).
 
 ## Layout
 
 | Path | What it is |
 |---|---|
-| `src/scene/Sky.jsx` | Sky gradient, sun, clouds, aurora and stars in one shader; also bakes the reflection map |
+| `src/scene/Sky.jsx` | Sky gradient, sun, clouds and stars in one shader; also bakes the reflection map |
 | `src/scene/Sea.jsx`, `Ground.jsx` | Water with sun glints; ground with a wavy shoreline |
 | `src/scene/Grass.jsx` | Instanced frost grass with wind |
 | `src/scene/Petals.jsx` | GPU-animated petals drifting toward the sun |

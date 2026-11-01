@@ -1,4 +1,4 @@
-// Site copy. Everything marked PLACEHOLDER is waiting for real content.
+// Site copy.
 export const site = {
   name: 'Aditya Sharma',
   tagline: 'Software & Web Developer',
@@ -14,40 +14,47 @@ export const about = {
   skills: ['HTML & CSS', 'JavaScript', 'React', 'Three.js', 'Node.js', 'Python', 'MongoDB', 'MySQL'],
 }
 
-// One project per lit tower. PLACEHOLDER content.
+// One project per lit tower (four towers). `link` is optional; private repos have none.
 export const projects = [
   {
-    name: 'Project One',
-    summary: 'PLACEHOLDER: one line on what this project does and who it is for.',
-    stack: ['React', 'Node.js'],
-    link: 'https://github.com/addy3126',
+    name: 'Sourish Industries',
+    summary:
+      'Business website for an automotive drivetrain parts manufacturer: product catalogue with detail views, slideshow, and a contact form that emails enquiries through a hardened Express API.',
+    stack: ['React', 'TypeScript', 'Vite', 'Express', 'Nodemailer'],
+    link: 'https://sourish-industries.vercel.app',
+    linkLabel: 'Visit site',
   },
   {
-    name: 'Project Two',
-    summary: 'PLACEHOLDER: one line on what this project does and who it is for.',
-    stack: ['Python', 'Pandas'],
-    link: 'https://github.com/addy3126',
+    name: 'PrajnaAI',
+    summary:
+      'AI document analysis platform. DocuDigest lets you chat with uploaded PDFs; DocuLens checks banking documents against regulatory standards. Includes an admin console.',
+    stack: ['React', 'TypeScript', 'Material UI', 'Redux', 'LangChain', 'Docker'],
+    note: 'Private repository',
   },
   {
-    name: 'Project Three',
-    summary: 'PLACEHOLDER: one line on what this project does and who it is for.',
-    stack: ['JavaScript', 'MongoDB'],
-    link: 'https://github.com/addy3126',
+    name: 'Unified Cancer Classification',
+    summary:
+      'Deep-learning classifier for medical images across several cancer types, with Grad-CAM heatmaps that show what the model looked at, served through a Flask API and a React upload interface.',
+    stack: ['TensorFlow', 'Keras', 'OpenCV', 'Flask', 'React', 'TypeScript'],
+    link: 'https://unified-cancer-classification.vercel.app',
+    linkLabel: 'Try it',
   },
   {
-    name: 'Project Four',
-    summary: 'PLACEHOLDER: one line on what this project does and who it is for.',
-    stack: ['Three.js', 'GLSL'],
-    link: 'https://github.com/addy3126',
+    name: 'Finance Tracker',
+    summary: 'Personal finance app to log income and expenses by category, with charts, JWT authentication and a MongoDB backend.',
+    stack: ['MongoDB', 'Express', 'React', 'Node.js', 'Redux Toolkit', 'Chart.js'],
+    link: 'https://github.com/Addy3126/Finance-Tracker-using-MERN',
+    linkLabel: 'View code',
   },
 ]
 
-// PLACEHOLDER contact details.
 export const contact = {
   heading: 'Say hello',
-  email: 'hello@example.com',
+  email: 'adi.sharma3126@gmail.com',
+  phone: '+91 81788 59524',
+  phoneHref: 'tel:+918178859524',
   links: [
-    { label: 'GitHub', href: 'https://github.com/addy3126' },
-    { label: 'LinkedIn', href: 'https://www.linkedin.com/' },
+    { label: 'GitHub', href: 'https://github.com/Addy3126' },
+    { label: 'LinkedIn', href: 'https://www.linkedin.com/in/aditya-sharma-8a5476282/' },
   ],
 }
