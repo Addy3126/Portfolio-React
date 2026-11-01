@@ -20,6 +20,7 @@ import {
   offset,
   outline,
 } from './piano/geometry'
+import { debug } from '../quality'
 import { PIANO_CENTRE, PIANO_POS, palette, shared } from './world'
 
 const LID_ANGLE = 0.58
@@ -385,7 +386,7 @@ export default function Piano() {
   const capture = useRef({ frame: 0, done: false, rt: null, env: null })
   useFrame(() => {
     const c = capture.current
-    if (c.done || ++c.frame < 8) return // after the shadow map and grass have settled
+    if (c.done || !debug.envCapture || ++c.frame < 8) return // after the shadow map and grass have settled
     c.done = true
     const rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType })
     const cam = new THREE.CubeCamera(0.3, 3000, rt)

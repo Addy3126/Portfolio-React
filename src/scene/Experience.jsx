@@ -79,7 +79,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       <Ruins hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano />
 
-      <Effects godRays={q.godRays && debug.godRays} dof={q.dof && debug.dof} sanitize={debug.sanitize} msaaOverride={debug.msaa} />
+      <Effects godRays={q.godRays && debug.godRays} sanitize={debug.sanitize} msaaOverride={debug.msaa} />
     </Canvas>
   )
 }

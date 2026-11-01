@@ -36,7 +36,8 @@ void main(){
 
   // Beach: a strip of sand between the grass and the water.
   float inland = landDist(vWorld.xz); // metres from the waterline (negative = under water)
-  float beach = 1.0 - smoothstep(2.4, 3.3, inland);
+  // Sand reaches under the ragged edge of the grass (which starts 2-5 m inland).
+  float beach = 1.0 - smoothstep(3.0, 5.2, inland);
   // The spit (land beyond the main field) is sand and rock, not grass.
   float spit = 1.0 - smoothstep(-3.0, 0.5, mainDist(vWorld.xz));
   beach = max(beach, spit);
@@ -47,13 +48,18 @@ void main(){
   vec3 R = reflect(V, vec3(0.0, 1.0, 0.0));
   vec3 wetCol = cWet + uFogGlow * pow(max(dot(R, uSunDir), 0.0), 30.0) * 0.6; // wet sand mirrors the glow
   sand = mix(sand, wetCol, wet);
-  // Rocky patches on the spit, more toward its end.
-  // Pebbly sand on the spit: small dark grains, a bit denser toward its end.
-  float grains = smoothstep(0.78, 0.9, vnoise(vWorld.xz * 9.0)) * (0.5 + 0.5 * vnoise(vWorld.xz * 0.5)) * (1.0 + max(0.0, -vWorld.z - 30.0) * 0.02);
-  sand = mix(sand, cRockG * (0.8 + 0.4 * vnoise(vWorld.xz * 23.0)), clamp(spit * grains, 0.0, 0.7));
+  // Sand surface: soft wind ripples, fine grain and a sprinkling of tiny dark grit.
+  // Fine detail fades out with distance so it never turns into blotches or shimmer.
+  float near = 1.0 - smoothstep(6.0, 30.0, dist);
+  float ripple = sin(dot(vWorld.xz, vec2(0.8, 0.6)) * 7.0 + vnoise(vWorld.xz * 0.6) * 7.0) * 0.5 + 0.5;
+  sand *= 1.0 + (ripple - 0.5) * 0.07 * (1.0 - smoothstep(10.0, 45.0, dist));
+  sand *= 1.0 + (vnoise(vWorld.xz * 60.0) - 0.5) * 0.12 * near;
+  float grit = smoothstep(0.86, 0.95, vnoise(vWorld.xz * 38.0)) * near;
+  sand = mix(sand, cRockG, grit * 0.45 * (0.4 + spit * 0.6));
   col = mix(col, sand, beach);
-  // Darken as the seabed drops away.
-  col = mix(col, cWet * 0.5, 1.0 - smoothstep(-0.2, -0.02, vWorld.y));
+  // Darken as the seabed drops away (by distance from the waterline, not height, so the
+  // gentle undulation of the land doesn't draw dark contour lines on the sand).
+  col = mix(col, cWet * 0.5, 1.0 - smoothstep(-1.5, -0.1, inland));
 
   // Grass carpet where blades are no longer drawn (far LOD).
   float far = smoothstep(uGrassFar - 4.0, uGrassFar, length(vWorld.xz - cameraPosition.xz));

@@ -14,7 +14,6 @@ export const MAX_LEVEL = 2
 export function settingsFor(level) {
   const q = { ...TIERS[tier] }
   q.godRays = q.effects === 'full' && level < 1
-  q.dof = q.effects === 'full' && level < 2
   if (level >= 1) {
     q.dpr = [1, 1]
     q.grassHi *= 0.7
@@ -41,16 +40,16 @@ function pickTier() {
 
 export const tier = pickTier()
 export const quality = TIERS[tier]
-// Debug switches for tracking down rendering problems, e.g. ?godrays=0&dof=0.
+// Debug switches for tracking down rendering problems, e.g. ?godrays=0&reflection=0.
 const params = new URLSearchParams(window.location.search)
 const off = (name) => params.get(name) === '0'
 export const debug = {
   godRays: !off('godrays'),
-  dof: !off('dof'),
   sanitize: !off('sanitize'),
   reflection: !off('reflection'),
   flowers: !off('flowers'),
   shadow: !off('shadow'),
+  envCapture: !off('envcap'),
   // ?fps=0 renders every display frame (no cap); ?fps=60 sets a different cap.
   fps: params.has('fps') ? Number(params.get('fps')) : FPS_CAP,
   // ?msaa=0|2|4 overrides multisampling.
