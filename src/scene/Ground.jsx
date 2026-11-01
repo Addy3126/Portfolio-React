@@ -24,7 +24,7 @@ void main(){
   vec3 V = toP / dist;
   vec3 col = mix(cNear, cFar, smoothstep(2.0, 18.0, dist));
   // Wet sand darkening as the ground dips into the sea.
-  col = mix(col, cNear * 0.6, smoothstep(-0.02, -0.2, vWorld.y));
+  col = mix(col, cNear * 0.6, 1.0 - smoothstep(-0.2, -0.02, vWorld.y));
   float back = pow(max(dot(V, uSunDir), 0.0), 5.0);
   col += cFrost * back * 0.25;
   float pd = length(vWorld.xz - uPianoPos.xz);

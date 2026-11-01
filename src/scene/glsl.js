@@ -1,5 +1,6 @@
 // Shared GLSL helpers.
 export const noiseGLSL = /* glsl */ `
+float spow(float x, float e){ return pow(max(x, 0.0), e); }
 float hash12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float vnoise(vec2 p){
   vec2 i = floor(p), f = fract(p);
@@ -20,9 +21,10 @@ uniform vec3 uFogGlow;
 uniform float uFogDensity;
 uniform vec3 uSunDir;
 vec3 applyFog(vec3 col, float dist, vec3 V){
-  float f = 1.0 - exp(-pow(dist * uFogDensity, 2.0));
+  float fd = dist * uFogDensity;
+  float f = 1.0 - exp(-fd * fd);
   float sd = max(dot(V, uSunDir), 0.0);
-  vec3 fc = mix(uFogColor, uFogGlow, pow(sd, 8.0) * 0.7);
+  vec3 fc = mix(uFogColor, uFogGlow, pow(max(sd, 0.0), 8.0) * 0.7);
   return mix(col, fc, f);
 }
 `

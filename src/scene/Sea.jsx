@@ -36,7 +36,7 @@ void main(){
   vec3 n = normalize(vec3(slope.x, 1.0, slope.y));
 
   vec3 R = reflect(V, n);
-  float fres = pow(1.0 - max(dot(-V, n), 0.0), 4.0);
+  float fres = spow(1.0 - clamp(dot(-V, n), 0.0, 1.0), 4.0);
   vec3 base = mix(cNear, cFar, smoothstep(4.0, 260.0, dist));
   float sd = max(dot(R, uSunDir), 0.0);
   vec3 refl = mix(cFar * 0.9, cGlow, pow(sd, 10.0));
