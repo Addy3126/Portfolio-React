@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { bedFactor } from './beds'
 import { fogGLSL, noiseGLSL, shadowGLSL } from './glsl'
 import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, landDist, mainDist, palette, shared } from './world'
 
@@ -332,6 +333,11 @@ function buildTile(tx, tz, base, rand) {
       height *= 0.7 // shorter, sparser beach grass
     }
     height *= 0.65 + 0.35 * edgeFade // shorter where it thins out at the edge
+    const bed = bedFactor(x, z)
+    if (bed > 0) {
+      if (rand() < bed * 0.4) continue // thinner under the flowers
+      height *= 1 - 0.6 * bed // and low, so the bed shows
+    }
     if (seed) {
       height = 0.5 + rand() * 0.22
       width *= 0.55
