@@ -1,13 +1,32 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Bloom, DepthOfField, EffectComposer, GodRays, Noise, SMAA, ToneMapping, Vignette } from '@react-three/postprocessing'
-import { BlendFunction, KernelSize, ToneMappingMode } from 'postprocessing'
+import { Bloom, DepthOfField, EffectComposer, GodRays, Noise, SMAA, ToneMapping, Vignette, wrapEffect } from '@react-three/postprocessing'
+import { BlendFunction, Effect, KernelSize, ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import { bloomEnabled, reducedMotion } from '../quality'
 import { motion } from '../store'
 import { PIANO_CENTRE, SUN_DIR } from './world'
 
 const SUN_DISTANCE = 1400
+
+// Safety net: replaces any invalid (NaN/infinite) pixel before blur and bloom, which
+// would otherwise smear one bad pixel into large black blocks. The empty mainUv keeps
+// this in its own pass, so the passes after it read the cleaned image.
+class SanitizeEffect extends Effect {
+  constructor() {
+    super(
+      'SanitizeEffect',
+      /* glsl */ `
+      void mainUv(inout vec2 uv) {}
+      void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+        vec3 c = inputColor.rgb;
+        bool bad = any(isnan(c)) || any(isinf(c));
+        outputColor = vec4(bad ? vec3(0.0) : min(c, vec3(12.0)), bad ? 1.0 : inputColor.a); // cap also tames lacquer fireflies
+      }`,
+    )
+  }
+}
+const Sanitize = wrapEffect(SanitizeEffect)
 
 // Light source for the shafts: a bright disc where the sky draws the sun.
 // It is never added to the scene; the god-rays pass renders it on its own.
@@ -53,6 +72,7 @@ export default function Effects({ godRays = true, dof = true }) {
   const msaa = dof ? 2 : 0
   return (
     <EffectComposer ref={composer} multisampling={msaa} frameBufferType={THREE.HalfFloatType} autoClear={false}>
+      <Sanitize />
       {dof && <DepthOfField ref={dofEffect} target={PIANO_CENTRE.toArray()} focusRange={3.5} bokehScale={0} resolutionScale={0.5} />}
       {godRays && (
         <GodRays

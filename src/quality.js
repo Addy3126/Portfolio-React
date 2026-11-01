@@ -6,7 +6,7 @@ const TIERS = {
 }
 
 // Frames per second the scene renders at (the page itself still scrolls at full rate).
-export const FPS_CAP = 29
+export const FPS_CAP = 45
 
 // Auto quality steps down from the starting tier when frames run long.
 // 0 = as detected, 1 = lighter, 2 = lightest.

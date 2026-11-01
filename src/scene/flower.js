@@ -90,7 +90,7 @@ export const flowerShadeGLSL = /* glsl */ `
 uniform vec3 cPetal, cSheen, cVein, cBell, cSkyF, cGroundF, cSunF;
 float fpow(float x, float e){ return pow(max(x, 0.0), e); }
 vec3 shadeFlower(vec3 V, float dist){
-  vec3 N = normalize(vNormalW) * (gl_FrontFacing ? 1.0 : -1.0);
+  vec3 N = normalize(vNormalW + vec3(0.0, 1e-5, 0.0)) * (gl_FrontFacing ? 1.0 : -1.0);
   vec3 L = uSunDir;
   float across = abs(vUv.x - 0.5) * 2.0; // 0 on the midline, 1 at the edge
   float along = vUv.y;
