@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { fogGLSL, noiseGLSL } from './glsl'
-import { PIANO_POS, color, hideInReflection, palette, shared, shoreZ } from './world'
+import { fogGLSL, noiseGLSL, shadowGLSL } from './glsl'
+import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, palette, shared, shoreZ } from './world'
 
-const SEGMENTS = 5
 const CLUMP_CELL = 0.9 // metres between clump centres
 
 // One tapered blade, 0..1 tall, centred on x = 0.
-function bladeGeometry() {
+function bladeGeometry(SEGMENTS) {
   const positions = []
   const index = []
   for (let i = 0; i <= SEGMENTS; i++) {
@@ -60,6 +59,8 @@ attribute vec4 iParams; // yaw, height, width, random
 attribute vec2 iClump;  // clump tone, distance from clump centre (0..1)
 uniform float uTime;
 uniform float uMotion;
+uniform vec2 uCursor;
+uniform float uCursorStrength;
 varying float vT;
 varying float vRand;
 varying float vTone;
@@ -98,6 +99,15 @@ void main(){
   w.y -= bend * bend * 0.5;
   n.xz -= windDir * bend * 0.6;
 
+  // Part around the cursor: blades lean away from it, more toward their tips.
+  vec2 away = iOffset.xz - uCursor;
+  float dc = length(away);
+  float part = uCursorStrength * (1.0 - smoothstep(0.12, 0.9, dc));
+  vec2 pushDir = away / max(dc, 1e-3);
+  w.xz += pushDir * part * t * t * hgt * 1.15;
+  w.y -= part * part * t * t * hgt * 0.45;
+  n.xz += pushDir * part * 0.8;
+
   // Large-scale patches: x = frost, y = dark hollow, z = blue tint.
   vec2 pp = iOffset.xz;
   vPatch = vec3(fbm(pp * 0.09 + 3.0), vnoise(pp * 0.16 - 7.0), vnoise(pp * 0.05 + 11.0));
@@ -122,6 +132,7 @@ varying vec3 vNormal;
 varying vec3 vPatch;
 float spow(float x, float e){ return pow(max(x, 0.0), e); }
 ${fogGLSL}
+${shadowGLSL}
 void main(){
   float t = clamp(vT, 0.0, 1.0);
   vec3 toP = vWorld - cameraPosition;
@@ -143,12 +154,23 @@ void main(){
   vec3 H = normalize(L - V);
   float spec = spow(dot(N, H), 12.0) * t;
 
+  // Piano shadow dims the sun terms (and a little of the sky light); contact darkens under the case.
+  float sh = pianoShadow(vWorld);
+  float contact = pianoContact(vWorld.xz);
+  ambient *= mix(0.55, 1.0, sh) * contact;
+  wrap *= sh;
+  through *= mix(0.3, 1.0, sh);
+  spec *= sh;
+
   vec3 col = albedo * (ambient + cSun * wrap * 0.45) + albedo * cSun * through * 1.4 + cSun * spec * 0.08;
 
   // Frost on the upper blade, heavier in frosty patches.
   float frost = smoothstep(0.3, 0.95, t) * (0.55 + 0.45 * smoothstep(0.35, 0.7, vPatch.x));
   vec3 frostLit = cFrost * (0.5 + ambient * 0.7 + cSun * (wrap * 0.3 + through * 1.4));
   col = mix(col, frostLit, frost * 0.8);
+
+  // Shadow also dims the frost, which is otherwise lit by the sky alone.
+  col *= mix(0.62, 1.0, sh);
 
   // Ambient occlusion: dark at the roots.
   col *= mix(0.22, 1.0, smoothstep(0.0, 0.55, t));
@@ -167,9 +189,13 @@ void main(){
 }
 `
 
-export default function Grass({ count }) {
+// layer 'near' = detailed blades from the camera to z = 0; 'far' = cheaper, wider blades out to the beach.
+export default function Grass({ count, layer = 'near' }) {
   const geometry = useMemo(() => {
-    const g = bladeGeometry()
+    const far = layer === 'far'
+    const g = bladeGeometry(far ? 3 : 5)
+    const zMax = far ? 0.5 : 11.8
+    const zMin = far ? -10.5 : 0
     const offsets = new Float32Array(count * 3)
     const params = new Float32Array(count * 4)
     const clumps = new Float32Array(count * 2)
@@ -178,10 +204,10 @@ export default function Grass({ count }) {
     while (n < count && guard++ < count * 30) {
       // Denser near the camera: sample depth with a bias toward the front.
       const u = Math.random()
-      const z = 11.8 - 20.8 * Math.pow(u, 0.85)
+      const z = zMax - (zMax - zMin) * Math.pow(u, far ? 1 : 0.85)
       const halfWidth = (11.5 - z) * 1.05 + 3
       const x = (Math.random() * 2 - 1) * halfWidth
-      if (z < shoreZ(x) + 0.25) continue
+      if (z < shoreZ(x) + BEACH_WIDTH) continue
       // Leave a clearing around the landing cameras so no blade fills the lens.
       if (Math.hypot(x, z - 9) < 1.4 || Math.hypot(x + 1.5, z - 10.8) < 1.4) continue
 
@@ -203,7 +229,7 @@ export default function Grass({ count }) {
 
       const height =
         (0.34 + Math.random() * 0.26) * clump.height * (1.08 - 0.4 * rel) * (nearBench ? 0.4 : 1) * (z < -4 ? 1.2 : 1)
-      const width = 0.03 + Math.random() * 0.028 + Math.max(0, -z) * 0.004
+      const width = (0.03 + Math.random() * 0.028 + Math.max(0, -z) * 0.004) * (far ? 1.5 : 1)
 
       offsets.set([x, 0, z], n * 3)
       params.set([yaw, height, width, Math.random()], n * 4)
@@ -215,7 +241,7 @@ export default function Grass({ count }) {
     g.setAttribute('iClump', new THREE.InstancedBufferAttribute(clumps, 2))
     g.instanceCount = n
     return g
-  }, [count])
+  }, [count, layer])
 
   const material = useMemo(
     () =>

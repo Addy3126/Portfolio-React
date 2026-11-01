@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { SHADOW_LAYER } from './PianoShadow'
 import { PIANO_POS, palette, shared } from './world'
 
 const HALF = 0.725 // half the case width (m)
@@ -87,8 +88,14 @@ export default function Piano() {
   const propH = propR * Math.sin(LID_ANGLE)
   const propZ = -HALF + propR * Math.cos(LID_ANGLE)
 
+  // Everything in the piano also renders into the shadow map.
+  const group = useRef()
+  useEffect(() => {
+    group.current.traverse((o) => o.layers.enable(SHADOW_LAYER))
+  }, [])
+
   return (
-    <group position={PIANO_POS}>
+    <group ref={group} position={PIANO_POS}>
       {/* Case, soundboard plate, raised lid, prop */}
       <mesh geometry={geo.body} material={mats.lacquer} />
       <mesh geometry={geo.plate} material={mats.gold} />

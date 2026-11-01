@@ -9,6 +9,12 @@ export const PIANO_POS = new THREE.Vector3(-2.55, 0, 3.7)
 
 // Wavy shoreline: grass grows where z > shoreZ(x).
 export const shoreZ = (x) => -8 + Math.sin(x * 0.15) * 1.2 + Math.sin(x * 0.37 + 1.3) * 0.5
+// Grass stops this far inland from the waterline, leaving a strip of beach.
+export const BEACH_WIDTH = 0.8
+// Centre of the piano case in world x/z.
+export const PIANO_CENTRE = new THREE.Vector3(PIANO_POS.x + 1.1, 0.8, PIANO_POS.z)
+// Light direction used for the piano's shadow: the sun's bearing, raised so the shadow stays compact.
+export const SHADOW_DIR = new THREE.Vector3(SUN_DIR.x, 0.55, SUN_DIR.z).normalize()
 
 export const palette = {
   zenith: '#0b0e2d',
@@ -44,6 +50,12 @@ export const shared = {
   uPianoPos: { value: PIANO_POS.clone().add(new THREE.Vector3(1.1, 0, 0)) },
   uPianoGlow: { value: c(palette.pianoGlow) },
   uGlowPulse: { value: 1 },
+  // Piano shadow map (white placeholder until the real one is rendered).
+  uShadowMap: { value: (() => { const t = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); t.needsUpdate = true; return t })() },
+  uShadowMatrix: { value: new THREE.Matrix4() },
+  // Cursor position on the field (x/z) and how strongly grass parts around it.
+  uCursor: { value: new THREE.Vector2(999, 999) },
+  uCursorStrength: { value: 0 },
 }
 
 export const color = c

@@ -1,17 +1,18 @@
 import { useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { Bloom, EffectComposer, Noise, ToneMapping, Vignette } from '@react-three/postprocessing'
-import { BlendFunction, ToneMappingMode } from 'postprocessing'
-import * as THREE from 'three'
-import { bloomEnabled, quality } from '../quality'
+import { quality } from '../quality'
 import CameraRig from './CameraRig'
+import CursorField from './CursorField'
+import Effects from './Effects'
 import FieldFlowers from './FieldFlowers'
 import Grass from './Grass'
 import Ground from './Ground'
 import Petals from './Petals'
 import Piano from './Piano'
+import PianoShadow from './PianoShadow'
 import Ruins from './Ruins'
 import Sea from './Sea'
+import SkillLabels from './SkillLabels'
 import Sky from './Sky'
 import { SUN_DIR, shared } from './world'
 
@@ -37,6 +38,8 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
     >
       <Clock onReady={onReady} />
       <CameraRig />
+      <CursorField />
+      <PianoShadow />
 
       <hemisphereLight args={['#8f86c8', '#20255e', 1.2]} />
       <directionalLight position={SUN_DIR.clone().multiplyScalar(100)} color="#f5c8d0" intensity={2.2} />
@@ -46,18 +49,15 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       <Sky />
       <Sea />
       <Ground />
-      <Grass count={quality.grass} />
+      <Grass count={quality.grassNear} layer="near" />
+      <Grass count={quality.grassFar} layer="far" />
       <FieldFlowers />
       <Petals count={quality.petals} />
       <Ruins hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano />
+      <SkillLabels />
 
-      <EffectComposer multisampling={quality.multisampling} frameBufferType={THREE.HalfFloatType}>
-        {bloomEnabled && <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.82} luminanceSmoothing={0.25} />}
-        <ToneMapping mode={ToneMappingMode.NEUTRAL} />
-        <Vignette offset={0.3} darkness={0.55} />
-        <Noise opacity={0.035} blendFunction={BlendFunction.OVERLAY} />
-      </EffectComposer>
+      <Effects />
     </Canvas>
   )
 }
