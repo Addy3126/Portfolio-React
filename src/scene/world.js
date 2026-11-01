@@ -25,7 +25,7 @@ export const palette = {
   ruin: '#1e1525',
   headland: '#0e102e',
   grassBase: '#121640',
-  grassTip: '#6a64b8',
+  grassTip: '#9a94d8',
   frost: '#e6dcff',
   pianoGlow: '#6f9bff',
   fog: '#3b3280',
@@ -47,3 +47,6 @@ export const shared = {
 }
 
 export const color = c
+
+// Objects skipped in the water reflection pass (too costly, barely visible there).
+export const hideInReflection = new Set()
