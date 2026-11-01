@@ -39,8 +39,13 @@ float mainDist(vec2 xz){ return min(min(xz.y - shoreZ(xz.x), xz.x - bankX(xz.y))
 vec2 spitPoint(float t){ return vec2(16.0 + 6.0 * sin(t * 3.0) + 22.0 * t * t, -5.0 - 48.0 * t); }
 float spitHalfWidth(float t){ return 2.2 + 8.5 * pow(1.0 - t, 0.8) + 0.9 * sin(t * 13.0); }
 float spitDist(vec2 xz){
-  // Cheap reject far from the spit.
-  if (xz.y > 8.0 || xz.y < -66.0 || xz.x < 0.0 || xz.x > 56.0) return -1e3;
+  // Skip only where it provably can't matter. The spit (centre line plus max half-width)
+  // fits in x 10..45, z -53..-5 expanded by 11 m. More than 40 m from that box the spit is
+  // over 29 m away, so the smooth union returns the field's value unchanged, or both are
+  // deep water where every shore effect has already saturated. (A tighter box made shore
+  // colours and foam jump along straight lines at its edges.)
+  vec2 dq = max(abs(xz - vec2(22.5, -29.0)) - vec2(23.5, 35.0), 0.0);
+  if (length(dq) > 40.0) return -1e3;
   float best = -1e9;
   vec2 prev = spitPoint(0.0);
   for (int i = 1; i <= 24; i++) {
