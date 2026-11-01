@@ -72,3 +72,4 @@ export function noiseBump({ seed = 1, size = 256, dots = 2600, minR = 0.6, maxR 
     { repeat },
   )
 }
+

@@ -156,7 +156,7 @@ void main(){
 `
 
 const fragment = /* glsl */ `
-uniform vec3 cWall, cWall2, cMortar, cSlab, cCore, cRebar, cVine, cTrim, cFrostB, cWetB, cSaltB, cSkyB, cGroundB, cSunB;
+uniform vec3 cWall, cWall2, cMortar, cSlab, cCore, cRebar, cVine, cTrim, cFrostB, cWetB, cSaltB, cAlgae, cSkyB, cGroundB, cSunB;
 varying vec3 vWorld;
 varying vec3 vNormalW;
 varying float vKind;
@@ -212,6 +212,15 @@ void main(){
     albedo *= 1.0 - 0.28 * streak;
     albedo *= mix(0.72, 1.0, smoothstep(0.0, 5.0, y));
     albedo = mix(albedo, cWetB, 1.0 - smoothstep(0.1, 0.7, y));
+    // Rising damp: water wicks up the masonry from the sea, leaving a darker band with an
+    // irregular tide-mark edge, algae near the bottom, and white salt bloom (efflorescence)
+    // where it dries along the top edge.
+    float dampTop = 1.6 + 1.4 * vnoise(vec2(u * 0.35, 1.0)) + 0.4 * vnoise(vec2(u * 2.0, 3.0));
+    float damp = 1.0 - smoothstep(dampTop - 0.5, dampTop, y);
+    albedo *= 1.0 - 0.32 * damp * vertical;
+    albedo = mix(albedo, cAlgae, (1.0 - smoothstep(0.4, 1.4, y)) * smoothstep(0.35, 0.65, vnoise(vec2(u * 1.6, y * 2.0))) * 0.55 * vertical);
+    float bloom = (1.0 - smoothstep(0.0, 0.25, abs(y - dampTop + 0.15))) * smoothstep(0.45, 0.75, vnoise(vec2(u * 4.0, y * 6.0)));
+    albedo = mix(albedo, cSaltB, bloom * 0.4 * vertical);
     float salt = smoothstep(0.7, 0.9, y) * (1.0 - smoothstep(1.1, 1.7, y)) * smoothstep(0.45, 0.7, vnoise(vec2(u * 2.0, y * 3.0)));
     albedo = mix(albedo, cSaltB, salt * 0.3);
     float up = smoothstep(0.6, 0.9, N.y) * smoothstep(0.4, 0.65, vnoise(vWorld.xz * 1.3));
@@ -252,6 +261,7 @@ export function buildingMaterial(style) {
       cFrostB: { value: color('#8f88c4') },
       cWetB: { value: color('#141633') },
       cSaltB: { value: color('#b9b2d6') },
+      cAlgae: { value: color('#1f3a44') },
       cSkyB: { value: color('#7d74c4') },
       cGroundB: { value: color('#1a1d4a') },
       cSunB: { value: color('#f5c8d0') },

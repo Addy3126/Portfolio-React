@@ -37,7 +37,13 @@ const FINISHES = {
 }
 
 export function pianoMaterials(d) {
-  const lacquer = new THREE.MeshPhysicalMaterial({ ...FINISHES[d.finish], clearcoat: 1, clearcoatRoughness: 0.1 })
+  const lacquer = new THREE.MeshPhysicalMaterial({
+    ...FINISHES[d.finish],
+    clearcoat: 1,
+    // No clearcoat normal map: three.js derives its tangent frame from screen-space
+    // derivatives, which degenerate on some edge pixels and produce NaN (black specks).
+    clearcoatRoughness: 0.11,
+  })
   const spruce = spruceTextures()
   const hammertone = noiseBump({ seed: 3, dots: 3400, repeat: [5, 5] })
   const felt = noiseBump({ seed: 5, dots: 5000, minR: 0.4, maxR: 1.2, repeat: [1, 1] })
@@ -79,6 +85,28 @@ function instanced(geometry, material, points) {
   const m = new THREE.Matrix4()
   points.forEach((p, i) => mesh.setMatrixAt(i, m.makeTranslation(p[0], p[1], p[2])))
   return mesh
+}
+
+// Replace zero-length or invalid normals (from degenerate edges in extruded outlines),
+// which make the lacquer's lighting produce NaN pixels.
+function fixNormals(g) {
+  const n = g.attributes.normal
+  if (!n) return 0
+  let fixed = 0
+  for (let i = 0; i < n.count; i++) {
+    const x = n.getX(i)
+    const y = n.getY(i)
+    const z = n.getZ(i)
+    const len = Math.hypot(x, y, z)
+    if (!(len > 1e-6) || !Number.isFinite(len)) {
+      n.setXYZ(i, 0, 1, 0)
+      fixed++
+    } else if (Math.abs(len - 1) > 1e-3) {
+      n.setXYZ(i, x / len, y / len, z / len)
+    }
+  }
+  if (fixed) n.needsUpdate = true
+  return fixed
 }
 
 function buildPiano(d, mats) {
@@ -365,7 +393,14 @@ function buildPiano(d, mats) {
 
 export default function Piano() {
   const mats = useMemo(() => pianoMaterials(design), [])
-  const parts = useMemo(() => buildPiano(design, mats), [mats])
+  const parts = useMemo(() => {
+    const list = buildPiano(design, mats)
+    let fixed = 0
+    for (const p of list) p.traverse((o) => o.geometry && (fixed += fixNormals(o.geometry)))
+    if (fixed && import.meta.env.DEV) console.info('piano: repaired', fixed, 'normals')
+    window.__pianoNormalsFixed = fixed
+    return list
+  }, [mats])
 
   // Blue spill on the grass: full for the glowing design, faint otherwise.
   useEffect(() => {
@@ -400,7 +435,7 @@ export default function Piano() {
     rt.dispose()
     for (const m of [mats.lacquer, mats.brass, mats.plate, mats.ebony, mats.steel, mats.bolt]) {
       m.envMap = env.texture
-      m.envMapIntensity = 1
+      m.envMapIntensity = m === mats.lacquer ? 1.35 : 1
       m.needsUpdate = true
     }
     c.env = env
