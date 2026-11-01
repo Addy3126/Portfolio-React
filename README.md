@@ -1,70 +1,35 @@
-# Getting Started with Create React App
+# Nocturne Field
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Aditya Sharma's portfolio: a real-time Three.js scene of an empty grand piano in a frosted field at twilight. Scrolling moves the camera between four stops: landing, About (at the piano), Projects (at the towers on the water) and Contact (at the shoreline).
 
-## Available Scripts
+Built with Vite, React 19, React Three Fiber, postprocessing and Lenis. Everything in the scene is generated in code. There are no model or texture files.
 
-In the project directory, you can run:
+## Scripts
 
-### `npm start`
+```bash
+npm install
+npm run dev      # local dev server
+npm run build    # production build to dist/
+npm run deploy   # build and publish dist/ to GitHub Pages
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Editing content
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+All text lives in `src/content.js`. Entries marked `PLACEHOLDER` are waiting for real content. Each project in `projects` is attached to one lit tower (see `TOWERS` in `src/scene/Ruins.jsx`).
 
-### `npm test`
+## Layout
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+| Path | What it is |
+|---|---|
+| `src/scene/Sky.jsx` | Sky gradient, sun, clouds, aurora and stars in one shader; also bakes the reflection map |
+| `src/scene/Sea.jsx`, `Ground.jsx` | Water with sun glints; ground with a wavy shoreline |
+| `src/scene/Grass.jsx` | Instanced frost grass with wind |
+| `src/scene/Petals.jsx` | GPU-animated petals drifting toward the sun |
+| `src/scene/Ruins.jsx` | Towers (project hover/click targets) and the headland |
+| `src/scene/Piano.jsx` | Procedural grand piano and empty bench |
+| `src/scene/CameraRig.jsx` | Camera stops per section, scroll interpolation, mouse parallax |
+| `src/scene/world.js` | Palette, sun direction, shared shader uniforms |
+| `src/overlay/` | HTML text panels over the canvas |
+| `src/quality.js` | Picks a quality tier (try `?quality=low`, `mid` or `high`) |
 
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Browsers without WebGL get a static render (`src/assets/fallback.jpg`) with the same text overlay. Reduced-motion settings slow the scene down and turn off smooth scrolling and parallax.
