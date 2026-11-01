@@ -1,51 +1,28 @@
 {
-  "homepage": "https://addy3126.github.io/Portfolio-React",
-  "name": "porfolio_react",
-  "version": "0.1.0",
+  "name": "nocturne-field-portfolio",
+  "version": "1.0.0",
   "private": true,
-  "dependencies": {
-    "@studio-freight/react-lenis": "^0.0.47",
-    "@testing-library/jest-dom": "^5.17.0",
-    "@testing-library/react": "^13.4.0",
-    "@testing-library/user-event": "^13.5.0",
-    "gsap": "^3.12.5",
-    "jquery": "^3.7.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-scripts": "^5.0.1",
-    "web-vitals": "^2.1.4"
-  },
+  "type": "module",
+  "homepage": "https://addy3126.github.io/Portfolio-React",
   "scripts": {
-    "start": "react-scripts start",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d build",
-    "build": "react-scripts build",
-    "dev": "nodemon server.js",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "deploy": "gh-pages -d dist"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+  "dependencies": {
+    "@react-three/fiber": "^9.8.2",
+    "@react-three/postprocessing": "^3.2.2",
+    "lenis": "^1.3.27",
+    "postprocessing": "^6.39.5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "three": "^0.186.1"
   },
   "devDependencies": {
-    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
-    "@types/jquery": "^3.5.30",
-    "gh-pages": "^6.1.1",
-    "nodemon": "^3.1.4"
+    "@vitejs/plugin-react": "^6.1.2",
+    "gh-pages": "^6.3.0",
+    "vite": "^8.3.5"
   }
 }
