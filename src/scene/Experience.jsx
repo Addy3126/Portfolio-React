@@ -1,18 +1,18 @@
-import { useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { quality } from '../quality'
+import { autoQualityEnabled, grassEnabled, settingsFor } from '../quality'
 import CameraRig from './CameraRig'
 import CursorField from './CursorField'
 import Effects from './Effects'
 import FieldFlowers from './FieldFlowers'
 import Grass from './Grass'
 import Ground from './Ground'
+import { AutoQuality, FrameLimiter } from './Perf'
 import Petals from './Petals'
 import Piano from './Piano'
 import PianoShadow from './PianoShadow'
 import Ruins from './Ruins'
 import Sea from './Sea'
-import SkillLabels from './SkillLabels'
 import Sky from './Sky'
 import { SUN_DIR, shared } from './world'
 
@@ -28,14 +28,19 @@ function Clock({ onReady }) {
 }
 
 export default function Experience({ hovered, selected, onHover, onSelect, onReady }) {
+  const [level, setLevel] = useState(0)
+  const q = useMemo(() => settingsFor(level), [level])
   return (
     <Canvas
       className="scene"
-      dpr={quality.dpr}
+      frameloop="demand"
+      dpr={q.dpr}
       camera={{ fov: 42, near: 0.1, far: 3000, position: [0, 1, 9] }}
       gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }}
       onPointerMissed={() => onSelect(null)}
     >
+      <FrameLimiter />
+      {autoQualityEnabled && <AutoQuality level={level} onLevel={setLevel} />}
       <Clock onReady={onReady} />
       <CameraRig />
       <CursorField />
@@ -47,17 +52,16 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       <pointLight position={[-1.45, 0.35, 4.3]} color="#6f9bff" intensity={1.4} distance={4} decay={2} />
 
       <Sky />
-      <Sea />
+      <Sea reflection={q.reflection} />
       <Ground />
-      <Grass count={quality.grassNear} layer="near" />
-      <Grass count={quality.grassFar} layer="far" />
-      <FieldFlowers />
-      <Petals count={quality.petals} />
+      {grassEnabled && <Grass count={q.grassNear} layer="near" />}
+      {grassEnabled && <Grass count={q.grassFar} layer="far" />}
+      {grassEnabled && <FieldFlowers />}
+      <Petals count={q.petals} />
       <Ruins hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano />
-      <SkillLabels />
 
-      <Effects />
+      <Effects godRays={q.godRays} dof={q.dof} />
     </Canvas>
   )
 }

@@ -1,9 +1,9 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Bloom, DepthOfField, EffectComposer, GodRays, Noise, ToneMapping, Vignette } from '@react-three/postprocessing'
+import { Bloom, DepthOfField, EffectComposer, GodRays, Noise, SMAA, ToneMapping, Vignette } from '@react-three/postprocessing'
 import { BlendFunction, KernelSize, ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
-import { bloomEnabled, quality, reducedMotion } from '../quality'
+import { bloomEnabled, reducedMotion } from '../quality'
 import { motion } from '../store'
 import { PIANO_CENTRE, SUN_DIR } from './world'
 
@@ -22,33 +22,42 @@ function useSunSource() {
   }, [])
 }
 
-export default function Effects() {
-  const full = quality.effects === 'full'
+export default function Effects({ godRays = true, dof = true }) {
   const sun = useSunSource()
-  const dof = useRef()
-  const rays = useRef()
+  const composer = useRef()
+  const dofEffect = useRef()
+  const dofPass = useRef(null)
 
   useFrame(({ camera }) => {
-    sun.position.copy(camera.position).addScaledVector(SUN_DIR, SUN_DISTANCE)
-    sun.updateMatrixWorld()
+    if (godRays) {
+      sun.position.copy(camera.position).addScaledVector(SUN_DIR, SUN_DISTANCE)
+      sun.updateMatrixWorld()
+    }
 
-    // Depth of field only around the About stop, focused on the piano.
-    if (dof.current) {
+    // Depth of field only around the About stop. Elsewhere its pass is switched off
+    // entirely, so it costs nothing.
+    if (dofEffect.current && composer.current) {
+      if (!dofPass.current || !composer.current.passes.includes(dofPass.current)) {
+        dofPass.current = composer.current.passes.find((p) => p.effects?.includes(dofEffect.current)) || null
+      }
       const w = 1 - THREE.MathUtils.smoothstep(Math.abs(motion.progress - 1), 0.15, 0.5)
-      dof.current.bokehScale = w * 2.0
+      dofEffect.current.bokehScale = w * 2.0
+      // Only toggle the pass if depth of field is the only effect in it.
+      if (dofPass.current && dofPass.current.effects.length === 1) dofPass.current.enabled = w > 0.001
     }
   })
 
+  // Depth of field needs hardware multisampling: without it the blur produces invalid
+  // pixels that bloom spreads across the frame (black screen). 2x is half the old cost.
+  // When depth of field is off, use cheaper SMAA instead.
+  const msaa = dof ? 2 : 0
   return (
-    <EffectComposer multisampling={quality.multisampling} frameBufferType={THREE.HalfFloatType} autoClear={false}>
-      {full && (
-        <DepthOfField ref={dof} target={PIANO_CENTRE.toArray()} focusRange={3.5} bokehScale={0} resolutionScale={0.5} />
-      )}
-      {full && (
+    <EffectComposer ref={composer} multisampling={msaa} frameBufferType={THREE.HalfFloatType} autoClear={false}>
+      {dof && <DepthOfField ref={dofEffect} target={PIANO_CENTRE.toArray()} focusRange={3.5} bokehScale={0} resolutionScale={0.5} />}
+      {godRays && (
         <GodRays
-          ref={rays}
           sun={sun}
-          samples={reducedMotion ? 30 : 48}
+          samples={reducedMotion ? 30 : 40}
           density={0.96}
           decay={0.94}
           weight={0.35}
@@ -61,6 +70,7 @@ export default function Effects() {
       )}
       {bloomEnabled && <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.82} luminanceSmoothing={0.25} />}
       <ToneMapping mode={ToneMappingMode.NEUTRAL} />
+      {msaa === 0 && <SMAA />}
       <Vignette offset={0.3} darkness={0.55} />
       <Noise opacity={0.035} blendFunction={BlendFunction.OVERLAY} />
     </EffectComposer>

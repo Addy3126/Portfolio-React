@@ -89,8 +89,7 @@ export default function Overlay({ goTo, hovered, selected, onHover, onSelect, re
       <section ref={(el) => (panels.current[1] = el)} className="panel about" aria-labelledby="about-h">
         <h2 id="about-h">{about.heading}</h2>
         <p>{about.body}</p>
-        {/* Skills float above the piano's music stand in the scene; this list is for screen readers. */}
-        <ul className="sr-only" aria-label="Skills">
+        <ul className="chips" aria-label="Skills">
           {about.skills.map((s) => (
             <li key={s}>{s}</li>
           ))}
