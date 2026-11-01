@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { fogGLSL } from './glsl'
-import { color, shared } from './world'
+import { hideInReflection, color, shared } from './world'
 
 // Petals live in a box that scrolls toward the sun and wraps around.
 const BOX_MIN = [-36, 0.15, -70]
@@ -41,10 +41,10 @@ void main(){
   p.y += sin(t * 0.5 * speed + ph * 1.3) * 0.9 + sin(t * 0.17 + p.x * 0.05) * 0.6;
   p.z += cos(t * 0.3 * speed + ph) * 1.2;
 
-  float size = (0.08 + iSeed2.y * 0.12) * clamp(distance(p, cameraPosition) / 6.0, 0.35, 1.0);
+  float size = (0.14 + iSeed2.y * 0.14) * clamp(distance(p, cameraPosition) / 6.0, 0.35, 1.0);
   vec3 axis = normalize(vec3(iSeed2.z - 0.5, 1.0, iSeed2.w - 0.5));
-  mat3 R = rotAxis(axis, t * (1.0 + iSeed2.z * 2.0) + ph);
-  vec3 local = R * (position * vec3(size, size * 0.55, size));
+  mat3 R = rotAxis(axis, t * (0.25 + iSeed2.z * 0.6) + ph); // slow, floating spin
+  vec3 local = R * (position * size);
   vShade = abs((R * vec3(0.0, 0.0, 1.0)).y);
 
   vec3 w = p + local;
@@ -54,21 +54,39 @@ void main(){
 `
 
 const fragment = /* glsl */ `
-uniform vec3 cPetal, cRim;
+uniform vec3 cPetal, cRim, cSheen, cVein;
 varying vec2 vUv;
 varying vec3 vWorld;
 varying float vShade;
 ${fogGLSL}
 void main(){
-  vec2 q = vUv - 0.5;
-  // Leaf shape: pointed ellipse.
-  float leaf = length(vec2(q.x, q.y * (1.0 + abs(q.x) * 2.5)));
-  if (leaf > 0.5) discard;
+  // Five pointed, lily-like petals in polar coordinates.
+  vec2 q = (vUv - 0.5) * 2.0;
+  float r = length(q);
+  float a = atan(q.y, q.x) + 1.5708;
+  float sector = 1.2566371; // 2*pi / 5
+  // d: 0 on a petal's midline, 1 halfway to the next petal.
+  float d = abs(mod(a + sector * 0.5, sector) - sector * 0.5) / (sector * 0.5);
+  float allowed = clamp(1.45 * pow(max(1.0 - r, 0.0), 0.5), 0.0, 1.0);
+  if (r > 1.0 || d > allowed) discard;
+
   vec3 toP = vWorld - cameraPosition;
   float dist = length(toP);
   vec3 V = toP / dist;
   float back = pow(max(dot(V, uSunDir), 0.0), 8.0);
-  vec3 col = cPetal * (0.5 + 0.5 * vShade) + cRim * back * 0.12;
+
+  // Deep indigo petals, darker toward their edges, with a soft gloss.
+  float edgeFade = d / max(allowed, 1e-3);
+  vec3 col = cPetal * (0.5 + 0.5 * vShade) * (1.15 - 0.45 * edgeFade);
+  col += cSheen * (1.0 - edgeFade) * smoothstep(0.2, 0.7, r) * 0.15 * vShade;
+
+  // Glowing vein down each petal and a bright centre (HDR, so bloom catches it).
+  float glow = 1.0 - smoothstep(4.0, 22.0, dist);
+  float vein = exp(-pow(d * max(r, 0.08) * 16.0, 2.0)) * (1.0 - smoothstep(0.55, 0.95, r));
+  float centre = exp(-r * r * 60.0);
+  col += cVein * (vein * 1.1 + centre * 2.2) * (0.35 + 0.65 * glow);
+
+  col += cRim * back * 0.1;
   gl_FragColor = vec4(applyFog(col, dist, V), 1.0);
 }
 `
@@ -103,12 +121,21 @@ export default function Petals({ count }) {
           ...shared,
           uBoxMin: { value: new THREE.Vector3(...BOX_MIN) },
           uBoxSize: { value: new THREE.Vector3(...BOX_SIZE) },
-          cPetal: { value: color('#120c30') },
+          cPetal: { value: color('#171442') },
+          cSheen: { value: color('#6a6ae0') },
+          cVein: { value: color('#9fb8ff') },
           cRim: { value: color('#f5c8d0') },
         },
       }),
     [],
   )
 
-  return <mesh geometry={geometry} material={material} frustumCulled={false} />
+  const mesh = useRef()
+  useEffect(() => {
+    const m = mesh.current
+    hideInReflection.add(m)
+    return () => hideInReflection.delete(m)
+  }, [])
+
+  return <mesh ref={mesh} geometry={geometry} material={material} frustumCulled={false} />
 }

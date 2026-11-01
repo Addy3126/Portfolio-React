@@ -4,14 +4,35 @@ import * as THREE from 'three'
 import { color, palette } from './world'
 
 // Towers out on the water. `project` links a tower to an entry in content.projects.
+// tilt: lean in radians (z, x); broken: jagged top; sunk: metres below the waterline.
 export const TOWERS = [
+  // Project towers, spread across the horizon right of the sun.
+  { x: 68, z: -218, w: 8, d: 7, h: 22, project: 0 },
+  { x: 98, z: -244, w: 7, d: 7, h: 18, project: 1 },
+  { x: 128, z: -212, w: 9, d: 8, h: 26, project: 2 },
+  { x: 162, z: -238, w: 6, d: 6, h: 17, project: 3 },
+
+  // Left of the sun: the broken spire and a loose, uneven skyline.
   { x: -12.6, z: -191, w: 6, d: 6, h: 35, broken: true },
-  { x: 79, z: -221, w: 9, d: 8, h: 21, project: 0 },
-  { x: 88.5, z: -226, w: 6, d: 6, h: 15, project: 1 },
-  { x: 97.5, z: -219, w: 8, d: 7, h: 24, project: 2 },
-  { x: 107, z: -224, w: 6, d: 6, h: 17, project: 3 },
-  { x: 132, z: -211, w: 5, d: 5, h: 12 },
-  { x: 148, z: -213, w: 8, d: 7, h: 17 },
+  { x: -30, z: -150, w: 5, d: 5, h: 11, broken: true, tilt: [0.05, 0] },
+  { x: -48, z: -232, w: 8, d: 7, h: 22, tilt: [0.07, 0.02] },
+  { x: -74, z: -265, w: 6, d: 6, h: 31, broken: true },
+  { x: -98, z: -214, w: 11, d: 8, h: 13, broken: true, sunk: 3 },
+  { x: -132, z: -252, w: 7, d: 7, h: 25, tilt: [-0.09, 0] },
+  { x: -168, z: -205, w: 13, d: 10, h: 9, broken: true },
+  { x: -24, z: -430, w: 12, d: 10, h: 46, broken: true }, // far, mostly lost in haze
+
+  // Right side, between the project towers and the headland.
+  { x: -60, z: -168, w: 4, d: 4, h: 8, broken: true, tilt: [0.12, 0.05] },
+  { x: 196, z: -206, w: 6, d: 6, h: 14, broken: true },
+  { x: 145, z: -320, w: 9, d: 9, h: 30, broken: true },
+]
+
+// Fallen slabs lying in the water: [x, z, width, height, depth, rotY, rotZ]
+const SLABS = [
+  [-36, -205, 14, 2.4, 5, 0.4, 0.12],
+  [84, -205, 10, 1.8, 4, -0.3, -0.08],
+  [-118, -236, 16, 3, 6, 0.9, 0.05],
 ]
 
 const ruinMat = new THREE.MeshStandardMaterial({ color: color(palette.ruin), roughness: 1, metalness: 0 })
@@ -36,7 +57,7 @@ function Tower({ tower, index, state, onHover, onSelect }) {
     const rows = Math.floor((tower.h * (tower.broken ? 0.75 : 0.92)) / 2.6)
     for (let row = 1; row < rows; row++) {
       for (let c = 0; c < cols; c++) {
-        if (r() < (tower.project !== undefined ? 0.2 : 0.55)) continue
+        if (r() < (tower.project !== undefined ? 0.2 : 0.7)) continue
         const x = -tower.w / 2 + (c + 0.5) * (tower.w / cols)
         list.push([x, row * 2.6, tower.d / 2 + 0.05])
       }
@@ -75,17 +96,23 @@ function Tower({ tower, index, state, onHover, onSelect }) {
       }
     : {}
 
+  const [tz = 0, tx = 0] = tower.tilt || []
+  const y0 = -(tower.sunk || 0)
   return (
-    <group position={[tower.x, 0, tower.z]}>
+    <group position={[tower.x, y0, tower.z]} rotation={[tx, 0, tz]}>
       <mesh material={ruinMat} position={[0, tower.h / 2 - 1, 0]} {...handlers}>
         <boxGeometry args={[tower.w, tower.h + 2, tower.d]} />
       </mesh>
-      {tower.broken && (
-        <mesh material={ruinMat} position={[tower.w * 0.15, tower.h + 2.5, 0]} rotation={[0, 0, -0.35]}>
-          <boxGeometry args={[tower.w * 0.45, 9, tower.d * 0.8]} />
-        </mesh>
-      )}
-      {!tower.broken && (
+      {tower.broken ? (
+        <>
+          <mesh material={ruinMat} position={[tower.w * 0.18, tower.h + 2.2, 0]} rotation={[0, 0, -0.35]}>
+            <boxGeometry args={[tower.w * 0.42, Math.min(9, tower.h * 0.3), tower.d * 0.8]} />
+          </mesh>
+          <mesh material={ruinMat} position={[-tower.w * 0.3, tower.h + 0.9, tower.d * 0.1]} rotation={[0.1, 0, 0.2]}>
+            <boxGeometry args={[tower.w * 0.35, Math.min(4, tower.h * 0.15), tower.d * 0.6]} />
+          </mesh>
+        </>
+      ) : (
         <mesh material={ruinMat} position={[-tower.w * 0.2, tower.h + 0.8, 0]}>
           <boxGeometry args={[tower.w * 0.5, 1.8, tower.d * 0.9]} />
         </mesh>
@@ -156,6 +183,11 @@ export default function Ruins({ hovered, selected, onHover, onSelect }) {
           onHover={onHover}
           onSelect={onSelect}
         />
+      ))}
+      {SLABS.map(([x, z, w, h, d, ry, rz], i) => (
+        <mesh key={i} material={ruinMat} position={[x, h * 0.2, z]} rotation={[0, ry, rz]}>
+          <boxGeometry args={[w, h, d]} />
+        </mesh>
       ))}
       <Headland />
     </group>

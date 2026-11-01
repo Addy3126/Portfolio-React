@@ -12,7 +12,7 @@ const contactPos = v(6, 0.7, -10)
 export const SHOTS = [
   { pos: v(0, 1.0, 9), look: v(6, 2.6, -120), portrait: { pos: v(-1.5, 1.15, 10.8), look: v(-0.4, 2.7, -120) } },
   { pos: v(-5.2, 1.35, 8.2), look: v(2.5, 1.0, -6), portrait: { pos: v(-4.6, 1.5, 9.6), look: v(-1.6, 0.9, 3.6) } },
-  { pos: v(52, 9, -122), look: v(93, 15, -222), portrait: { pos: v(70, 10, -150), look: v(93, 14, -222) } },
+  { pos: v(70, 9, -120), look: v(87, 15, -218), portrait: { pos: v(75, 16, -40), look: v(112, 15, -230) } },
   {
     pos: contactPos,
     look: contactPos.clone().addScaledVector(SUN_DIR, 200).add(v(0, 9, 0)),

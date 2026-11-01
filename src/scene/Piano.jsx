@@ -130,7 +130,7 @@ export default function Piano() {
       {[
         [0.2, -0.55],
         [0.2, 0.55],
-        [2.0, 0.2],
+        [1.85, -0.36], // tail leg, under the narrow end of the case
       ].map(([x, z]) => (
         <mesh key={`${x}${z}`} material={mats.dark} position={[x, RIM_BOTTOM / 2, z]}>
           <cylinderGeometry args={[0.065, 0.048, RIM_BOTTOM, 12]} />
