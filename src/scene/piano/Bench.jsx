@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { lathe, roundedRect } from './geometry'
+import { noiseBump } from './textures'
 
 const BENCH_X = -0.78 // bench centre, in front of the keyboard
 
@@ -91,9 +92,9 @@ export default function Bench({ design, lacquer, brass, glow }) {
       lacquer,
       brass,
       glow,
-      leather: new THREE.MeshPhysicalMaterial({ color: '#141018', roughness: 0.42, clearcoat: 0.25, clearcoatRoughness: 0.4 }),
+      leather: new THREE.MeshPhysicalMaterial({ color: '#141018', roughness: 0.42, clearcoat: 0.25, clearcoatRoughness: 0.4, bumpMap: noiseBump({ seed: 9, dots: 4200, minR: 0.5, maxR: 1.8, repeat: [3, 3] }), bumpScale: 0.6 }),
       tuft: new THREE.MeshStandardMaterial({ color: '#060508', roughness: 0.6 }),
-      velvet: new THREE.MeshPhysicalMaterial({ color: '#2a2466', roughness: 0.9, sheen: 1, sheenColor: new THREE.Color('#7b6ae0'), sheenRoughness: 0.5 }),
+      velvet: new THREE.MeshPhysicalMaterial({ color: '#2a2466', roughness: 0.9, sheen: 1, sheenColor: new THREE.Color('#7b6ae0'), sheenRoughness: 0.5, bumpMap: noiseBump({ seed: 11, dots: 6000, minR: 0.3, maxR: 0.9, repeat: [4, 4] }), bumpScale: 0.3 }),
     }
     return design.bench === 'artist' ? artistBench(m) : design.bench === 'duet' ? duetBench(m) : curvedBench(m)
   }, [design, lacquer, brass, glow])

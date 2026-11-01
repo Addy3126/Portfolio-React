@@ -36,7 +36,11 @@ export default function Overlay({ goTo, hovered, selected, onHover, onSelect, re
   usePanelFades(panels, cue)
   const time = useLocalTime(site.timeZone)
   const [copied, setCopied] = useState(false)
-  const active = selected ?? hovered
+  const touch = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
+  // On touch screens only a tap opens details; a hover-driven layout shift would move
+  // the list under the finger before the tap lands.
+  const active = touch ? selected : selected ?? hovered
+
   const project = active !== null && active !== undefined ? projects[active] : null
 
   const copyEmail = async () => {
@@ -99,7 +103,7 @@ export default function Overlay({ goTo, hovered, selected, onHover, onSelect, re
       <section ref={(el) => (panels.current[2] = el)} className="panel projects" aria-labelledby="projects-h">
         <div className="project-list">
           <h2 id="projects-h">Projects</h2>
-          <p className="hint">Hover a lit tower, or pick one here.</p>
+          <p className="hint">{touch ? 'Tap a project to see details.' : 'Hover a lit tower, or pick one here.'}</p>
           <ol>
             {projects.map((p, i) => (
               <li key={p.name}>
@@ -128,9 +132,13 @@ export default function Overlay({ goTo, hovered, selected, onHover, onSelect, re
                   <li key={s}>{s}</li>
                 ))}
               </ul>
-              <a href={project.link} target="_blank" rel="noreferrer">
-                View project
-              </a>
+              {project.link ? (
+                <a href={project.link} target="_blank" rel="noreferrer">
+                  {project.linkLabel || 'View project'}
+                </a>
+              ) : (
+                project.note && <p className="note">{project.note}</p>
+              )}
             </>
           )}
         </article>
@@ -141,6 +149,12 @@ export default function Overlay({ goTo, hovered, selected, onHover, onSelect, re
         <div className="email">
           <span>{contact.email}</span>
           <button onClick={copyEmail}>{copied ? 'Copied' : 'Copy email'}</button>
+        </div>
+        <div className="email">
+          <span>{contact.phone}</span>
+          <a className="call" href={contact.phoneHref}>
+            Call
+          </a>
         </div>
         <ul className="links">
           {contact.links.map((l) => (

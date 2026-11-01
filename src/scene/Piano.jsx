@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { SHADOW_LAYER } from './PianoShadow'
 import Bench from './piano/Bench'
 import { design } from './piano/designs'
+import { noiseBump, spruceTextures } from './piano/textures'
 import {
   HALF,
   RIM_BOTTOM,
@@ -19,7 +20,7 @@ import {
   offset,
   outline,
 } from './piano/geometry'
-import { PIANO_POS, palette, shared } from './world'
+import { PIANO_CENTRE, PIANO_POS, palette, shared } from './world'
 
 const LID_ANGLE = 0.58
 const FLAP_X = 0.37 // where the front lid flap hinges
@@ -36,16 +37,22 @@ const FINISHES = {
 
 export function pianoMaterials(d) {
   const lacquer = new THREE.MeshPhysicalMaterial({ ...FINISHES[d.finish], clearcoat: 1, clearcoatRoughness: 0.1 })
+  const spruce = spruceTextures()
+  const hammertone = noiseBump({ seed: 3, dots: 3400, repeat: [5, 5] })
+  const felt = noiseBump({ seed: 5, dots: 5000, minR: 0.4, maxR: 1.2, repeat: [1, 1] })
   return {
     lacquer,
     brass: new THREE.MeshStandardMaterial({ color: '#caa45a', metalness: 1, roughness: 0.28 }),
-    plate: new THREE.MeshStandardMaterial({ color: '#b48e48', metalness: 0.85, roughness: 0.38 }),
-    soundboard: new THREE.MeshStandardMaterial({ color: '#b88d55', roughness: 0.55 }),
+    plate: new THREE.MeshStandardMaterial({ color: '#b48e48', metalness: 0.85, roughness: 0.42, bumpMap: hammertone, bumpScale: 1.4 }),
+    soundboard: new THREE.MeshStandardMaterial({ map: spruce.map, bumpMap: spruce.bump, bumpScale: 0.6, roughness: 0.55 }),
+    bridge: new THREE.MeshStandardMaterial({ color: '#7a5332', map: spruce.map, roughness: 0.5 }),
+    hammerFelt: new THREE.MeshStandardMaterial({ color: '#e9e2d2', roughness: 1, bumpMap: felt, bumpScale: 0.8 }),
+    bolt: new THREE.MeshStandardMaterial({ color: '#8d7440', metalness: 0.9, roughness: 0.35 }),
     underside: new THREE.MeshStandardMaterial({ color: '#17141c', roughness: 0.85 }),
     ivory: new THREE.MeshStandardMaterial({ color: '#f3efe6', roughness: 0.32 }),
     ebony: new THREE.MeshPhysicalMaterial({ color: '#08080b', roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.12 }),
     redFelt: new THREE.MeshStandardMaterial({ color: '#6e1424', roughness: 1 }),
-    blackFelt: new THREE.MeshStandardMaterial({ color: '#121016', roughness: 1 }),
+    blackFelt: new THREE.MeshStandardMaterial({ color: '#121016', roughness: 1, bumpMap: felt, bumpScale: 0.8 }),
     steel: new THREE.MeshStandardMaterial({ color: '#d8dbe4', metalness: 1, roughness: 0.3 }),
     string: new THREE.LineBasicMaterial({ color: '#8e92a3' }),
     bassString: new THREE.LineBasicMaterial({ color: '#8a6440' }),
@@ -63,6 +70,13 @@ function boxes(list, material) {
     m.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sy, sz))
     mesh.setMatrixAt(i, m)
   })
+  return mesh
+}
+
+function instanced(geometry, material, points) {
+  const mesh = new THREE.InstancedMesh(geometry, material, points.length)
+  const m = new THREE.Matrix4()
+  points.forEach((p, i) => mesh.setMatrixAt(i, m.makeTranslation(p[0], p[1], p[2])))
   return mesh
 }
 
@@ -99,31 +113,50 @@ function buildPiano(d, mats) {
   const plateY = RIM_BOTTOM + 0.15
   add(extrudeUp(platePts, 0.022, plateY, 0.004, holes), mats.plate)
 
-  // --- Strings: march from the pin block toward the tail until they reach the rim.
+  // --- Strings, grouped per note like a real grand: one string for the lowest bass,
+  // two through the bass, three from the tenor up. They run from the agraffes near the
+  // keyboard over a curved bridge to hitch pins near the rim.
   const stringArea = offset(pts, WALL + 0.05)
   const treble = []
   const bass = []
   const pins = []
   const dampers = []
-  const N = 64
+  const hammers = []
+  const agraffes = []
+  const hitch = []
+  const bridgeTreble = []
+  const bridgeBass = []
+  const NOTES = 60
+  const noteW = (0.86 * W) / NOTES
   const sy = plateY + 0.034
-  for (let i = 0; i < N; i++) {
-    const u = i / (N - 1)
-    const s0 = 0.08 * W + 0.86 * W * u
+  for (let i = 0; i < NOTES; i++) {
+    const u = i / (NOTES - 1)
+    const sNote = 0.08 * W + 0.86 * W * u
     const x0 = 0.13
     const isBass = u < 0.3
+    const unison = u < 0.12 ? 1 : u < 0.3 ? 2 : 3
     const dir = new THREE.Vector2(1, isBass ? -0.11 * (1 - u / 0.3) - 0.02 : -0.015).normalize()
     let x = x0
-    let s = s0
-    while (inside(stringArea, x + dir.x * 0.02, s + dir.y * 0.02) && x < L) {
+    let sEnd = sNote
+    while (inside(stringArea, x + dir.x * 0.02, sEnd + dir.y * 0.02) && x < L) {
       x += dir.x * 0.02
-      s += dir.y * 0.02
+      sEnd += dir.y * 0.02
     }
     if (x - x0 < 0.12) continue
     const y = sy + (isBass ? 0.012 : 0)
-    ;(isBass ? bass : treble).push(x0, y, s0 - HALF, x, y, s - HALF)
-    pins.push([x0 - 0.035 - (i % 2) * 0.022, plateY + 0.04, s0 - HALF, 0.009, 0.035, 0.009])
-    if (u < 0.86) dampers.push([0.24, sy + 0.03, s0 - HALF, 0.04, 0.028, ((0.86 * W) / N) * 0.85])
+    for (let k = 0; k < unison; k++) {
+      const ds = (k - (unison - 1) / 2) * 0.0036
+      ;(isBass ? bass : treble).push(x0, y, sNote + ds - HALF, x, y, sEnd + ds - HALF)
+      pins.push([x0 - 0.035 - ((i + k) % 2) * 0.022, plateY + 0.04, sNote + ds - HALF, 0.008, 0.035, 0.008])
+    }
+    const z0 = sNote - HALF
+    agraffes.push([0.152, y + 0.004, z0, 0.012, 0.012, 0.004 * unison + 0.006])
+    hammers.push([0.205, y - 0.032, z0, 0.024, 0.03, noteW * 0.82])
+    if (u < 0.86) dampers.push([0.24, sy + 0.03, z0, 0.04, 0.028, noteW * 0.85])
+    // Bridge sits under the strings ~88% of the way along; hitch pins at the far end.
+    const f = 0.88
+    ;(isBass ? bridgeBass : bridgeTreble).push(new THREE.Vector3(x0 + (x - x0) * f, y - 0.009, z0 + (sEnd - sNote) * f))
+    hitch.push([x, y - 0.002, sEnd - HALF])
   }
   const lines = (arr, mat) => {
     const g = new THREE.BufferGeometry()
@@ -135,6 +168,35 @@ function buildPiano(d, mats) {
   lines(bass, mats.bassString)
   parts.push(boxes(pins, mats.steel))
   parts.push(boxes(dampers, mats.blackFelt))
+  parts.push(boxes(hammers, mats.hammerFelt))
+  parts.push(boxes(agraffes, mats.brass))
+  parts.push(instanced(new THREE.CylinderGeometry(0.003, 0.003, 0.016, 6), mats.steel, hitch))
+  for (const pts3 of [bridgeTreble, bridgeBass]) {
+    if (pts3.length < 2) continue
+    const bridge = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts3), Math.max(8, pts3.length * 2), 0.011, 4)
+    add(bridge, mats.bridge)
+  }
+
+  // Plate bolts: around the plate edge and each cut-out.
+  const bolts = []
+  const boltRing = offset(platePts, 0.03)
+  let acc = 0
+  for (let i = 1; i < boltRing.length; i++) {
+    acc += boltRing[i].distanceTo(boltRing[i - 1])
+    if (acc > 0.17) {
+      acc = 0
+      bolts.push([boltRing[i].x, plateY + 0.024, boltRing[i].y - HALF])
+    }
+  }
+  for (const h of holes)
+    for (let k = 0; k < h.length; k += Math.floor(h.length / 6)) {
+      const c = h.reduce((v, p) => v.add(p), new THREE.Vector2()).multiplyScalar(1 / h.length)
+      const p = h[k].clone().sub(c).multiplyScalar(1.3).add(c)
+      bolts.push([p.x, plateY + 0.024, p.y - HALF])
+    }
+  const boltGeo = new THREE.SphereGeometry(0.009, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2)
+  parts.push(instanced(boltGeo, mats.bolt, bolts))
+
   // Pressure bar across the strings.
   add(new THREE.BoxGeometry(0.014, 0.012, 0.88 * W), mats.brass, [0.16, sy + 0.012, 0.5 * W - HALF])
 
@@ -315,8 +377,36 @@ export default function Piano() {
     mats.glow.color.setRGB(0.35 * p * 2.2, 0.55 * p * 2.2, 1.6 * p * 2.2)
   })
 
-  // Everything in the piano also renders into the shadow map.
   const group = useRef()
+
+  // One-off reflection capture: a cube view of the field and sky from the piano's
+  // position (piano hidden), so the lacquer and brass reflect the real surroundings.
+  const { gl, scene } = useThree()
+  const capture = useRef({ frame: 0, done: false, rt: null, env: null })
+  useFrame(() => {
+    const c = capture.current
+    if (c.done || ++c.frame < 8) return // after the shadow map and grass have settled
+    c.done = true
+    const rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType })
+    const cam = new THREE.CubeCamera(0.3, 3000, rt)
+    cam.position.copy(PIANO_CENTRE).add(new THREE.Vector3(0, 0.5, 0))
+    group.current.visible = false
+    cam.update(gl, scene)
+    group.current.visible = true
+    const pmrem = new THREE.PMREMGenerator(gl)
+    const env = pmrem.fromCubemap(rt.texture)
+    pmrem.dispose()
+    rt.dispose()
+    for (const m of [mats.lacquer, mats.brass, mats.plate, mats.ebony, mats.steel, mats.bolt]) {
+      m.envMap = env.texture
+      m.envMapIntensity = 1
+      m.needsUpdate = true
+    }
+    c.env = env
+  })
+  useEffect(() => () => capture.current.env?.dispose(), [])
+
+  // Everything in the piano also renders into the shadow map.
   useEffect(() => {
     group.current.traverse((o) => o.layers.enable(SHADOW_LAYER))
   }, [])
