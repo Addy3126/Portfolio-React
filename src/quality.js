@@ -14,6 +14,7 @@ export const MAX_LEVEL = 2
 export function settingsFor(level) {
   const q = { ...TIERS[tier] }
   q.godRays = q.effects === 'full' && level < 1
+  q.ao = q.effects === 'full' && level < 1
   if (level >= 1) {
     q.dpr = [1, 1]
     q.grassHi *= 0.7
@@ -50,6 +51,10 @@ export const debug = {
   flowers: !off('flowers'),
   shadow: !off('shadow'),
   envCapture: !off('envcap'),
+  ao: !off('ao'),
+  grade: !off('grade'),
+  // ?tm=agx|aces|neutral picks the tone mapper (for comparisons).
+  tm: params.get('tm'),
   // ?fps=0 renders every display frame (no cap); ?fps=60 sets a different cap.
   fps: params.has('fps') ? Number(params.get('fps')) : FPS_CAP,
   // ?msaa=0|2|4 overrides multisampling.

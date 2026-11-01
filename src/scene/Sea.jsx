@@ -55,7 +55,7 @@ uniform sampler2D tDiffuse;
 uniform vec3 color;
 uniform float uTime;
 uniform float uMotion;
-uniform vec3 cDeep, cShallow, cFar, cGlow, cSkyRefl, cSandUnder, cFoam;
+uniform vec3 cDeep, cShallow, cFar, cGlow, cSkyRefl, cSandUnder, cFoam, cScatter;
 varying vec4 vUv;
 varying vec3 vWorld;
 varying vec2 vSwellSlope;
@@ -91,6 +91,9 @@ void main(){
   vec2 r1 = vec2(vnoise(p * 1.3 - t * 0.25), vnoise(p * 1.3 + 9.0 + t * 0.2)) - 0.5;
   vec2 r2 = vec2(vnoise(p * 4.5 + t * 0.6), vnoise(p * 4.5 - 4.0 - t * 0.5)) - 0.5;
   g += r1 * 0.09 * near + r2 * 0.06 * near;
+  // Capillary ripples right in front of the camera.
+  float close = 1.0 - smoothstep(4.0, 16.0, dist);
+  g += (vec2(vnoise(p * 11.0 + t * 1.1), vnoise(p * 11.0 - 3.0 - t * 0.9)) - 0.5) * 0.06 * close;
   g += (vec2(vnoise(p * 0.12 + t * 0.03), vnoise(p * 0.12 + 5.0)) - 0.5) * 0.04;
   vec3 n = normalize(vec3(-g.x, 1.0, -g.y));
 
@@ -106,18 +109,30 @@ void main(){
   #endif
 
   // Never draw water over land (the ground undulates around the sea level).
-  if (landDist(p) > 0.15) discard;
+  float L = landDist(p);
+  if (L > 0.15) discard;
   // Water depth above the seabed at this point.
   float depth = -0.04 - seabedY(p); // still-water depth (the moving swell would draw straight bands)
 
-  // Water body: see-through over sand in the shallows, darker out deep.
-  vec3 body = mix(cShallow, cDeep, smoothstep(2.0, 45.0, dist));
-  body = mix(body, cFar, smoothstep(120.0, 600.0, dist));
-  float clear = 1.0 - smoothstep(0.02, 0.32, depth);
+  // Water body by Beer-Lambert absorption: light travelling through more water loses red
+  // first, then green, so the sea goes from see-through sand at the waterline, through
+  // blue-violet, to deep indigo. The sea floor shelves gently, so the path length is
+  // taken from distance offshore. Looking down (steep) sees less water than grazing views.
+  float offshore = max(-L, 0.0);
+  float path = offshore * 0.55 / max(cosT, 0.25);
+  vec3 trans = exp(-vec3(0.55, 0.22, 0.1) * path);
   vec3 sandSeen = cSandUnder * (0.8 + 0.3 * vnoise(p * 3.0 + n.xz * 4.0));
-  body = mix(body, sandSeen, clear * 0.85);
+  vec3 deepCol = mix(cDeep, cFar, smoothstep(120.0, 600.0, dist));
+  vec3 body = sandSeen * trans + deepCol * (1.0 - trans) + cShallow * 0.25 * trans.b * (1.0 - trans.r);
+  float clear = trans.g;
   float reflAmt = clamp(fresnel * 1.15 + 0.08, 0.0, 1.0) * (1.0 - clear * 0.5);
   vec3 col = mix(body, refl, reflAmt);
+
+  // Light through the wave crests: when looking toward the low sun, the thin tops of the
+  // swell glow (subsurface scattering, as in game ocean shaders).
+  float crest = max(vWorld.y + 0.04, 0.0);
+  float towardSun = spow(dot(V, uSunDir), 3.0);
+  col += cScatter * crest * 9.0 * towardSun * (1.0 - fresnel) * (1.0 - smoothstep(60.0, 300.0, dist));
 
   // Sun glitter: sharp highlights nearby, a broader streak in the distance.
   vec3 R = reflect(V, n);
@@ -154,6 +169,7 @@ function linkUniforms(material) {
     cSkyRefl: { value: color('#5a4f9e') },
     cSandUnder: { value: color('#5d5aa6') },
     cFoam: { value: color('#e4dcff') },
+    cScatter: { value: color('#8f7cf0') },
   })
 }
 
