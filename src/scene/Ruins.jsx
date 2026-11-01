@@ -1,7 +1,8 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { color, palette } from './world'
+import { fogGLSL, mistGLSL } from './glsl'
+import { color, palette, shared } from './world'
 
 // Towers out on the water. `project` links a tower to an entry in content.projects.
 // tilt: lean in radians (z, x); broken: jagged top; sunk: metres below the waterline.
@@ -35,7 +36,67 @@ const SLABS = [
   [-118, -236, 16, 3, 6, 0.9, 0.05],
 ]
 
-const ruinMat = new THREE.MeshStandardMaterial({ color: color(palette.ruin), roughness: 1, metalness: 0 })
+// Silhouettes with soft sky light, a faint sun rim, distance fog and low mist over the water.
+const ruinVertex = /* glsl */ `
+varying vec3 vWorld;
+varying vec3 vNormalW;
+void main(){
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vWorld = w.xyz;
+  vNormalW = normalize(mat3(modelMatrix) * normal);
+  gl_Position = projectionMatrix * viewMatrix * w;
+}
+`
+const ruinFragment = /* glsl */ `
+uniform vec3 uColor;
+uniform vec3 cSkyR;
+varying vec3 vWorld;
+varying vec3 vNormalW;
+${fogGLSL}
+${mistGLSL}
+void main(){
+  vec3 toP = vWorld - cameraPosition;
+  float dist = length(toP);
+  vec3 V = toP / dist;
+  vec3 N = normalize(vNormalW);
+  vec3 col = uColor * (0.55 + 0.45 * (N.y * 0.5 + 0.5)) + cSkyR * max(N.y, 0.0) * 0.08;
+  float rim = pow(max(1.0 - abs(dot(N, -V)), 0.0), 3.0) * pow(max(dot(V, uSunDir), 0.0), 4.0);
+  col += uFogGlow * rim * 0.35;
+  // Lighter haze than the field gets, so silhouettes stay dark against the glow.
+  col = applyMist(col, dist * 0.7, V, vWorld.y);
+  gl_FragColor = vec4(applyFog(col, dist * 0.6, V), 1.0);
+}
+`
+const ruinMaterial = (hex) =>
+  new THREE.ShaderMaterial({
+    vertexShader: ruinVertex,
+    fragmentShader: ruinFragment,
+    uniforms: { ...shared, uColor: { value: color(hex) }, cSkyR: { value: color('#8a80d0') } },
+  })
+const ruinMat = ruinMaterial(palette.ruin)
+
+const windowVertex = /* glsl */ `
+varying vec3 vWorld;
+void main(){
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vWorld = w.xyz;
+  gl_Position = projectionMatrix * viewMatrix * w;
+}
+`
+const windowFragment = /* glsl */ `
+uniform vec3 uColor;
+varying vec3 vWorld;
+${fogGLSL}
+${mistGLSL}
+void main(){
+  vec3 toP = vWorld - cameraPosition;
+  float dist = length(toP);
+  vec3 V = toP / dist;
+  // Lit windows punch through the haze a little more than stone does.
+  vec3 col = applyMist(uColor, dist * 0.6, V, vWorld.y);
+  gl_FragColor = vec4(applyFog(col, dist * 0.75, V), 1.0);
+}
+`
 const DIM = color('#26306e')
 const LIT = new THREE.Color(3.2, 2.2, 2.4)
 const HOVER = new THREE.Color(1.5, 1.1, 1.3)
@@ -49,7 +110,10 @@ function rand(seed) {
 }
 
 function Tower({ tower, index, state, onHover, onSelect }) {
-  const windowMat = useMemo(() => new THREE.MeshBasicMaterial({ color: DIM.clone(), toneMapped: false }), [])
+  const windowMat = useMemo(
+    () => new THREE.ShaderMaterial({ vertexShader: windowVertex, fragmentShader: windowFragment, uniforms: { ...shared, uColor: { value: DIM.clone() } } }),
+    [],
+  )
   const windows = useMemo(() => {
     const r = rand(index * 97 + 13)
     const list = []
@@ -78,7 +142,7 @@ function Tower({ tower, index, state, onHover, onSelect }) {
     const target = state === 'selected' ? 1 : state === 'hover' ? 0.6 : 0
     level.current += (target - level.current) * Math.min(1, dt * 5)
     const l = level.current
-    windowMat.color.copy(DIM).lerp(l > 0.6 ? LIT : HOVER, Math.min(1, l / (l > 0.6 ? 1 : 0.6)))
+    windowMat.uniforms.uColor.value.copy(DIM).lerp(l > 0.6 ? LIT : HOVER, Math.min(1, l / (l > 0.6 ? 1 : 0.6)))
   })
 
   const interactive = tower.project !== undefined
@@ -153,7 +217,7 @@ function Headland() {
     g.computeVertexNormals()
     return g
   }, [])
-  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: color(palette.headland), roughness: 1 }), [])
+  const mat = useMemo(() => ruinMaterial(palette.headland), [])
   return (
     <group position={[225, 0, -250]}>
       <mesh geometry={geometry} material={mat} scale={[80, 30, 50]} position={[0, -6, 0]} />

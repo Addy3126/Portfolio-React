@@ -19,6 +19,13 @@ export const SHOTS = [
   },
 ]
 
+// Debug: ?cam=x,y,z,lookX,lookY,lookZ pins the camera (handy for inspecting the scene).
+const debugCam = (() => {
+  const v = new URLSearchParams(window.location.search).get('cam')
+  const n = v ? v.split(',').map(Number) : []
+  return n.length === 6 && n.every(Number.isFinite) ? { pos: new THREE.Vector3(n[0], n[1], n[2]), look: new THREE.Vector3(n[3], n[4], n[5]) } : null
+})()
+
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
 
 const tmpPos = new THREE.Vector3()
@@ -64,6 +71,10 @@ export default function CameraRig() {
       tmpPos.y += px.y * 0.1
     }
 
+    if (debugCam) {
+      tmpPos.copy(debugCam.pos)
+      tmpLook.copy(debugCam.look)
+    }
     camera.position.copy(tmpPos)
     camera.lookAt(tmpLook)
   })

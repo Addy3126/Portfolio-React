@@ -31,11 +31,16 @@ export default function App() {
     const onPointer = (e) => {
       motion.pointerX = (e.clientX / window.innerWidth) * 2 - 1
       motion.pointerY = -((e.clientY / window.innerHeight) * 2 - 1)
+      motion.pointerMovedAt = performance.now()
+      motion.pointerInside = e.pointerType === 'mouse'
     }
+    const onLeave = () => (motion.pointerInside = false)
+    document.documentElement.addEventListener('pointerleave', onLeave)
     window.addEventListener('pointermove', onPointer)
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('pointermove', onPointer)
+      document.documentElement.removeEventListener('pointerleave', onLeave)
       l.destroy()
     }
   }, [])
