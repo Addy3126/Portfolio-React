@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { quality } from '../quality'
+import { grassEnabled, quality } from '../quality'
 import CameraRig from './CameraRig'
 import CursorField from './CursorField'
 import Effects from './Effects'
@@ -12,7 +12,6 @@ import Piano from './Piano'
 import PianoShadow from './PianoShadow'
 import Ruins from './Ruins'
 import Sea from './Sea'
-import SkillLabels from './SkillLabels'
 import Sky from './Sky'
 import { SUN_DIR, shared } from './world'
 
@@ -49,13 +48,12 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       <Sky />
       <Sea />
       <Ground />
-      <Grass count={quality.grassNear} layer="near" />
-      <Grass count={quality.grassFar} layer="far" />
-      <FieldFlowers />
+      {grassEnabled && <Grass count={quality.grassNear} layer="near" />}
+      {grassEnabled && <Grass count={quality.grassFar} layer="far" />}
+      {grassEnabled && <FieldFlowers />}
       <Petals count={quality.petals} />
       <Ruins hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano />
-      <SkillLabels />
 
       <Effects />
     </Canvas>

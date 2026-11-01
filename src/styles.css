@@ -126,7 +126,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; text
 .about { left: 7vw; top: 18vh; width: min(460px, 86vw); padding: 28px 30px; }
 .about, .project-list, .project-detail, .contact { background: var(--glass); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .about h2, .projects h2, .contact h2 { font-size: clamp(34px, 3.4vw, 52px); line-height: 1; margin-bottom: 14px; }
-.about p { margin: 0; color: var(--ink-soft); }
+.about p { margin: 0 0 18px; color: var(--ink-soft); }
 .chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .chips li { font-size: 13px; padding: 4px 11px; border-radius: 999px; border: 1px solid rgba(111, 155, 255, 0.55); color: #d6e0ff; box-shadow: 0 0 12px rgba(111, 155, 255, 0.25) inset; }
 
