@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { fogGLSL, noise3GLSL, noiseGLSL } from '../glsl'
+import { fogGLSL, noise3GLSL, noiseGLSL, shoreGLSL } from '../glsl'
 import { color, shared } from '../world'
 import { fbm3, hash3, ridged3 } from './noise3'
 
@@ -142,6 +142,7 @@ varying float vCurv;
 ${noiseGLSL}
 ${noise3GLSL}
 ${fogGLSL}
+${shoreGLSL}
 void main(){
   vec3 toP = vWorld - cameraPosition;
   float dist = length(toP);
@@ -194,7 +195,9 @@ void main(){
   albedo = mix(albedo, cFrostR, up * 0.5);
 
   // Waterline: dark wet band with algae, then a faint salt crust above it.
-  float wet = 1.0 - smoothstep(0.05, 0.7, h);
+  // In the water (not stones lying on dry sand).
+  float inWater = 1.0 - smoothstep(-0.3, 0.4, landDist(vWorld.xz));
+  float wet = (1.0 - smoothstep(0.05, 0.7, h)) * inWater;
   albedo = mix(albedo, cWet, wet * 0.9);
   float salt = smoothstep(0.5, 0.8, h) * (1.0 - smoothstep(0.9, 1.6, h)) * smoothstep(0.5, 0.7, vnoise(vWorld.xz * 3.0 + h));
   albedo = mix(albedo, cSalt, salt * 0.3);
@@ -212,7 +215,7 @@ void main(){
   float t = uTime * uMotion;
   float line = -0.04 + 0.035 * sin(t * 1.2 + vWorld.x * 0.7 + vWorld.z * 0.5);
   float foam = (1.0 - smoothstep(0.0, 0.07, abs(h - line))) * smoothstep(0.4, 0.7, vnoise(vWorld.xz * 6.0 + t * 0.3)) * (1.0 - smoothstep(0.6, 0.9, abs(N.y)));
-  col = mix(col, cFoamR, foam * 0.7);
+  col = mix(col, cFoamR, foam * 0.7 * inWater);
 
   gl_FragColor = vec4(applyFog(col, dist, V), 1.0);
 }

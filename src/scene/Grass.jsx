@@ -67,7 +67,7 @@ function nearestClump(x, z) {
 
 // Where grass may grow.
 const inField = (x, z) =>
-  z <= FIELD.z1 && z >= FIELD.z0 && landDist(x, z) >= BEACH_WIDTH && (z < -16 || Math.abs(x) <= (11.5 - z) * 1.05 + 3) &&
+  z <= FIELD.z1 && z >= FIELD.z0 && landDist(x, z) >= BEACH_WIDTH - 1.2 && (z < -16 || Math.abs(x) <= (11.5 - z) * 1.05 + 3) &&
   Math.hypot(x, z - 9) >= 1.4 && Math.hypot(x + 1.5, z - 10.8) >= 1.4 && Math.hypot(x - 31, z + 38) >= 3.5 // clear of the Contact camera
 
 // Blade template: `parts` strips of `segments` segments. position = (side -0.5..0.5, t 0..1, part).
@@ -297,8 +297,22 @@ function buildTile(tx, tz, base, rand) {
     const x = x0 + rand() * TILE
     const z = z0 + rand() * TILE
     if (!inField(x, z)) continue
-    const onSpit = mainDist(x, z) < 0
-    if (onSpit && rand() > 0.07) continue // the spit: only scattered tufts among sand and rock
+    // Ragged edge where grass meets the beach: the line wanders, and grass thins out over
+    // the last metre or so instead of stopping on a hard line.
+    const ld = landDist(x, z)
+    const edge = BEACH_WIDTH - 1.1 + vnoise(x * 0.35 + 5, z * 0.35 - 2) * 2.4
+    if (ld < edge) continue
+    const edgeFade = THREE.MathUtils.smoothstep(ld, edge, edge + 1.6)
+    if (rand() > 0.12 + 0.88 * edgeFade) continue
+    // The spit: grass thins out gradually from the field, then survives only in a few
+    // natural clumps among the sand.
+    const md = mainDist(x, z)
+    const onSpit = md < 0
+    if (onSpit) {
+      const fromField = THREE.MathUtils.smoothstep(md, -10, 0)
+      const patch = THREE.MathUtils.smoothstep(vnoise(x * 0.16 + 21, z * 0.16 - 13), 0.62, 0.8)
+      if (rand() > Math.max(fromField, patch * 0.5)) continue
+    }
     const clump = nearestClump(x, z)
     const rel = Math.min(1, clump.d / (CLUMP_CELL * 0.75))
     if (rand() < rel * rel * 0.65) continue // gaps between clumps
@@ -307,8 +321,17 @@ function buildTile(tx, tz, base, rand) {
     const seed = rand() < 0.012 && !nearBench
     const yaw =
       clump.d > 0.08 ? Math.atan2(-(x - clump.cx), z - clump.cz) + (rand() - 0.5) * 0.9 : rand() * Math.PI * 2
-    let height = (0.24 + rand() * 0.36) * clump.height * (1.08 - 0.4 * rel) * (nearBench ? 0.4 : 1) * (z < -4 ? 1.2 : 1)
-    let width = 0.03 + rand() * 0.028 + Math.max(0, -z) * 0.004
+    let height = (0.24 + rand() * 0.36) * clump.height * (1.08 - 0.4 * rel) * (nearBench ? 0.4 : 1)
+    // Main field: back rows slightly taller and wider so they still read from the landing
+    // camera. The spit is seen up close from the Contact camera, so it keeps true sizes.
+    let width = 0.03 + rand() * 0.028
+    if (!onSpit) {
+      height *= z < -4 ? 1.2 : 1
+      width += Math.min(12, Math.max(0, -z)) * 0.004
+    } else {
+      height *= 0.7 // shorter, sparser beach grass
+    }
+    height *= 0.65 + 0.35 * edgeFade // shorter where it thins out at the edge
     if (seed) {
       height = 0.5 + rand() * 0.22
       width *= 0.55

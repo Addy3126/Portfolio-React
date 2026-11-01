@@ -1,11 +1,10 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { DepthOfField, EffectComposer, GodRays, Noise, SMAA, ToneMapping, Vignette, wrapEffect } from '@react-three/postprocessing'
+import { EffectComposer, GodRays, Noise, SMAA, ToneMapping, Vignette, wrapEffect } from '@react-three/postprocessing'
 import { BlendFunction, Effect, KernelSize, ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import { reducedMotion } from '../quality'
-import { motion } from '../store'
-import { PIANO_CENTRE, SUN_DIR } from './world'
+import { SUN_DIR } from './world'
 
 const SUN_DISTANCE = 1400
 
@@ -39,18 +38,18 @@ function useSunSource() {
   return useMemo(() => {
     const m = new THREE.Mesh(
       new THREE.SphereGeometry(1, 24, 12),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.86, 0.84), fog: false, toneMapped: false }),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.97, 0.95), fog: false, toneMapped: false }),
     )
-    m.scale.setScalar(34)
+    m.scale.setScalar(15) // smaller than the sky's sun disc, so its edge never shows
     return m
   }, [])
 }
 
-export default function Effects({ godRays = true, dof = true, sanitize = true, msaaOverride = null }) {
+// Depth of field was removed: its half-resolution blur produced invalid pixels on the
+// piano's lacquer (black 2x2 specks) on some GPUs.
+export default function Effects({ godRays = true, sanitize = true, msaaOverride = null }) {
   const sun = useSunSource()
   const composer = useRef()
-  const dofEffect = useRef()
-  const dofPass = useRef(null)
 
   useFrame(({ camera }) => {
     if (godRays) {
@@ -58,26 +57,13 @@ export default function Effects({ godRays = true, dof = true, sanitize = true, m
       sun.updateMatrixWorld()
     }
 
-    // Depth of field only around the About stop. Elsewhere its pass is switched off
-    // entirely, so it costs nothing.
-    if (dofEffect.current && composer.current) {
-      if (!dofPass.current || !composer.current.passes.includes(dofPass.current)) {
-        dofPass.current = composer.current.passes.find((p) => p.effects?.includes(dofEffect.current)) || null
-      }
-      const w = 1 - THREE.MathUtils.smoothstep(Math.abs(motion.progress - 1), 0.15, 0.5)
-      dofEffect.current.bokehScale = w * 2.0
-      // Only toggle the pass if depth of field is the only effect in it.
-      if (dofPass.current && dofPass.current.effects.length === 1) dofPass.current.enabled = w > 0.001
-    }
   })
 
-  // Edge smoothing: 2x hardware multisampling while depth of field is available (the DoF
-  // pass can emit stray invalid pixels without it); otherwise cheaper SMAA. ?msaa=N overrides.
-  const msaa = msaaOverride ?? (dof ? 2 : 0)
+  // Edge smoothing: SMAA by default; ?msaa=N switches to hardware multisampling.
+  const msaa = msaaOverride ?? 0
   return (
     <EffectComposer ref={composer} multisampling={msaa} frameBufferType={THREE.HalfFloatType} autoClear={false}>
       {sanitize && <Sanitize />}
-      {dof && <DepthOfField ref={dofEffect} target={PIANO_CENTRE.toArray()} focusRange={3.5} bokehScale={0} resolutionScale={0.5} />}
       {godRays && (
         <GodRays
           sun={sun}
