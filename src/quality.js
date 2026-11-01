@@ -39,6 +39,21 @@ function pickTier() {
 
 export const tier = pickTier()
 export const quality = TIERS[tier]
+// Debug switches for tracking down rendering problems, e.g. ?godrays=0&dof=0.
+const params = new URLSearchParams(window.location.search)
+const off = (name) => params.get(name) === '0'
+export const debug = {
+  godRays: !off('godrays'),
+  dof: !off('dof'),
+  sanitize: !off('sanitize'),
+  reflection: !off('reflection'),
+  flowers: !off('flowers'),
+  shadow: !off('shadow'),
+  // ?fps=0 renders every display frame (no cap); ?fps=60 sets a different cap.
+  fps: params.has('fps') ? Number(params.get('fps')) : FPS_CAP,
+  // ?msaa=0|2|4 overrides multisampling.
+  msaa: params.has('msaa') ? Number(params.get('msaa')) : null,
+}
 // Debug: ?grass=0 hides grass and field flowers (useful for inspecting the piano).
 export const grassEnabled = new URLSearchParams(window.location.search).get('grass') !== '0'
 // Debug: ?autoquality=0 keeps the starting tier even if frames run long.
