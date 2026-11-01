@@ -12,6 +12,7 @@ import Petals from './Petals'
 import Piano from './Piano'
 import PianoShadow from './PianoShadow'
 import Ruins from './Ruins'
+import Rocks from './Rocks'
 import Sea from './Sea'
 import Sky from './Sky'
 import { SUN_DIR, shared } from './world'
@@ -57,6 +58,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       {grassEnabled && <Grass density={q.grassDensity} hiDist={q.grassHi} loDist={q.grassLo} />}
       {grassEnabled && <FieldFlowers />}
       {debug.flowers && <Petals count={q.petals} />}
+      <Rocks />
       <Ruins hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano />
 
