@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js'
-import { fogGLSL, noiseGLSL, shoreGLSL } from './glsl'
+import { fogGLSL, noiseGLSL, shoreGLSL, swashGLSL } from './glsl'
 import { color, hideInReflection, palette, shared } from './world'
 
 const SEA_LEVEL = -0.04
@@ -63,6 +63,7 @@ varying float vSwellPhase;
 ${noiseGLSL}
 ${fogGLSL}
 ${shoreGLSL}
+${swashGLSL}
 
 // Slope of one travelling sine wave (deep-water dispersion).
 vec2 waveSlope(vec2 p, vec2 dir, float len, float amp, float t){
@@ -107,7 +108,7 @@ void main(){
   // Never draw water over land (the ground undulates around the sea level).
   if (landDist(p) > 0.15) discard;
   // Water depth above the seabed at this point.
-  float depth = vWorld.y - seabedY(p);
+  float depth = -0.04 - seabedY(p); // still-water depth (the moving swell would draw straight bands)
 
   // Water body: see-through over sand in the shallows, darker out deep.
   vec3 body = mix(cShallow, cDeep, smoothstep(2.0, 45.0, dist));
@@ -125,12 +126,9 @@ void main(){
   col += vec3(5.0, 4.6, 4.4) * spow(sd, shin) * mix(1.0, 0.45, smoothstep(6.0, 400.0, dist));
   col += cGlow * spow(sd, 60.0) * 0.18;
 
-  // Foam: a soft lace at the waterline, plus faint bands on swell crests in the shallows.
-  float breakup = vnoise(p * 11.0 + vec2(t * 0.35, -t * 0.2)) * 0.55 + vnoise(p * 31.0 - t * 0.5) * 0.45;
-  float edge = 1.0 - smoothstep(0.0, 0.022, depth);
-  float crest = smoothstep(0.85, 1.0, sin(vSwellPhase)) * (1.0 - smoothstep(0.03, 0.12, depth)) * 0.5;
-  float foam = clamp((edge + crest) * smoothstep(0.45, 0.8, breakup), 0.0, 1.0);
-  col = mix(col, cFoam * (0.7 + 0.3 * refl), foam * 0.6);
+  // Shore swash foam (shared with the sand shader so they meet seamlessly).
+  vec4 sw = swash(p, landDist(p), t);
+  col = mix(col, foamShadeAt(cFoam, V, vWorld.xz, sw.y), sw.y * 0.92);
 
   gl_FragColor = vec4(applyFog(col, dist, V), 1.0);
 }

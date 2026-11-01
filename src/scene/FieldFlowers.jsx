@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { flowerShadeGLSL, flowerUniforms, lilyGeometry, toInstanced } from './flower'
 import { fogGLSL, noiseGLSL } from './glsl'
-import { PIANO_POS, color, hideInReflection, shared } from './world'
+import { PIANO_POS, color, hideInReflection, landDist, shared, spitPoint } from './world'
 
 // Shared stem maths: wind-bent curve from the ground (t = 0) to the flower head (t = 1).
 const stemGLSL = /* glsl */ `
@@ -172,6 +172,45 @@ function scatter(rand) {
   }
   addClusters(16, 2, 5, 0) // dark lilies
   addClusters(20, 4, 8, 1) // small glowing bells
+
+  // Lily beds: loose, irregular patches, denser in the middle and ragged at the edges.
+  // `short` is for flowers growing out of sand (shorter stems).
+  const addBed = (cx, cz, rx, rz, lilies, bells, short = false) => {
+    const add = (kind, count) => {
+      let placed = 0
+      for (let tries = 0; placed < count && tries < count * 20; tries++) {
+        // Points pulled toward the centre (sqrt bias reversed) with a wobbly outline.
+        const a = rand() * Math.PI * 2
+        const r = Math.pow(rand(), 0.75) * (0.75 + 0.35 * Math.sin(a * 3 + cx))
+        const x = cx + Math.cos(a) * r * rx
+        const z = cz + Math.sin(a) * r * rz
+        if (blocked(x, z) || landDist(x, z) < 1.2) continue
+        const leanAng = rand() * Math.PI * 2
+        const lean = (kind ? 0.06 : 0.08) * rand()
+        const h = short ? 0.65 : 1
+        items.push({
+          base: [x, 0, z],
+          params: [
+            rand() * Math.PI * 2,
+            (kind ? 0.2 + rand() * 0.22 : 0.42 + rand() * 0.3) * h,
+            kind ? 0.05 + rand() * 0.025 : 0.11 + rand() * 0.06,
+            kind,
+          ],
+          lean: [Math.cos(leanAng) * lean, Math.sin(leanAng) * lean, kind ? 0.5 + rand() * 0.5 : 0.15 + rand() * 0.45, rand()],
+        })
+        placed++
+      }
+    }
+    add(0, lilies)
+    add(1, bells)
+  }
+  // Right of the piano.
+  addBed(PIANO_POS.x + 4.3, PIANO_POS.z - 1.1, 1.7, 1.1, 12, 14)
+  // On the sandy spit: one bed near its root, one just ahead of the Contact camera.
+  const [ax, az] = spitPoint(0.34)
+  addBed(ax + 1.5, az, 2.2, 1.6, 10, 10, true)
+  const [bx, bz] = spitPoint(0.8)
+  addBed(bx - 1.2, bz + 0.5, 1.8, 1.4, 8, 9, true)
   return items
 }
 
