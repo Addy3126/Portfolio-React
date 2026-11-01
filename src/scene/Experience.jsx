@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { autoQualityEnabled, grassEnabled, settingsFor } from '../quality'
+import { autoQualityEnabled, debug, grassEnabled, settingsFor } from '../quality'
 import CameraRig from './CameraRig'
 import CursorField from './CursorField'
 import Effects from './Effects'
@@ -33,18 +33,18 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
   return (
     <Canvas
       className="scene"
-      frameloop="demand"
+      frameloop={debug.fps === 0 ? 'always' : 'demand'}
       dpr={q.dpr}
       camera={{ fov: 42, near: 0.1, far: 3000, position: [0, 1, 9] }}
       gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }}
       onPointerMissed={() => onSelect(null)}
     >
-      <FrameLimiter />
-      {autoQualityEnabled && <AutoQuality level={level} onLevel={setLevel} />}
+      {debug.fps > 0 && <FrameLimiter fps={debug.fps} />}
+      {autoQualityEnabled && debug.fps > 0 && <AutoQuality level={level} onLevel={setLevel} fps={debug.fps} />}
       <Clock onReady={onReady} />
       <CameraRig />
       <CursorField />
-      <PianoShadow />
+      {debug.shadow && <PianoShadow />}
 
       <hemisphereLight args={['#8f86c8', '#20255e', 1.2]} />
       <directionalLight position={SUN_DIR.clone().multiplyScalar(100)} color="#f5c8d0" intensity={2.2} />
@@ -52,16 +52,16 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       <pointLight position={[-1.45, 0.35, 4.3]} color="#6f9bff" intensity={1.4} distance={4} decay={2} />
 
       <Sky />
-      <Sea reflection={q.reflection} />
+      <Sea reflection={debug.reflection ? q.reflection : 0} />
       <Ground />
       {grassEnabled && <Grass count={q.grassNear} layer="near" />}
       {grassEnabled && <Grass count={q.grassFar} layer="far" />}
       {grassEnabled && <FieldFlowers />}
-      <Petals count={q.petals} />
+      {debug.flowers && <Petals count={q.petals} />}
       <Ruins hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano />
 
-      <Effects godRays={q.godRays} dof={q.dof} />
+      <Effects godRays={q.godRays && debug.godRays} dof={q.dof && debug.dof} sanitize={debug.sanitize} msaaOverride={debug.msaa} />
     </Canvas>
   )
 }

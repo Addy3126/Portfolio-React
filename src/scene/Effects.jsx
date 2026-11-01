@@ -41,7 +41,7 @@ function useSunSource() {
   }, [])
 }
 
-export default function Effects({ godRays = true, dof = true }) {
+export default function Effects({ godRays = true, dof = true, sanitize = true, msaaOverride = null }) {
   const sun = useSunSource()
   const composer = useRef()
   const dofEffect = useRef()
@@ -69,10 +69,10 @@ export default function Effects({ godRays = true, dof = true }) {
   // Depth of field needs hardware multisampling: without it the blur produces invalid
   // pixels that bloom spreads across the frame (black screen). 2x is half the old cost.
   // When depth of field is off, use cheaper SMAA instead.
-  const msaa = dof ? 2 : 0
+  const msaa = msaaOverride ?? (dof ? 2 : 0)
   return (
     <EffectComposer ref={composer} multisampling={msaa} frameBufferType={THREE.HalfFloatType} autoClear={false}>
-      <Sanitize />
+      {sanitize && <Sanitize />}
       {dof && <DepthOfField ref={dofEffect} target={PIANO_CENTRE.toArray()} focusRange={3.5} bokehScale={0} resolutionScale={0.5} />}
       {godRays && (
         <GodRays
@@ -88,6 +88,8 @@ export default function Effects({ godRays = true, dof = true }) {
           resolutionScale={0.5}
         />
       )}
+      {/* Second safety net: catches anything the depth-of-field or light-shaft passes produce. */}
+      {sanitize && bloomEnabled && <Sanitize />}
       {bloomEnabled && <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.82} luminanceSmoothing={0.25} />}
       <ToneMapping mode={ToneMappingMode.NEUTRAL} />
       {msaa === 0 && <SMAA />}
