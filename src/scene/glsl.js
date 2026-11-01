@@ -103,3 +103,89 @@ float fbm3g(vec3 p){
   return v;
 }
 `
+
+// Shore swash and foam, shared by the sea and the sand so they meet seamlessly.
+// Needs noiseGLSL (vnoise), shoreGLSL (landDist) and fogGLSL (uSunDir, uFogGlow) first.
+// Model (after field observations of the swash zone): each stretch of beach gets a wave
+// every ~8 s, out of phase with its neighbours; the water runs up quickly (~40% of the
+// cycle) and drains back more slowly; it reaches further at cusp "horns", giving a
+// scalloped edge. A bright foam line leads the water, a lace of foam cells trails
+// behind it, the sand under the film shows through darkened, and the sand stays wet and
+// glossy up to the highest recent reach.
+export const swashGLSL = /* glsl */ `
+vec2 hash22(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973)); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.xx + p3.yz) * p3.zy); }
+// Voronoi: x = F1 (distance to nearest cell centre), y = F2 - F1 (small along borders).
+vec2 voronoi2(vec2 p, float t){
+  vec2 i = floor(p), f = fract(p);
+  float d1 = 8.0, d2 = 8.0;
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      vec2 g = vec2(float(x), float(y));
+      vec2 o = 0.5 + 0.42 * sin(t + 6.2831 * hash22(i + g)); // cells slowly breathe
+      float d = length(g + o - f);
+      if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) { d2 = d; }
+    }
+  }
+  return vec2(d1, d2 - d1);
+}
+// L = landDist (metres, + on land). Returns
+//   x: water cover over the sand, y: foam, z: sand wetness, w: rim shadow beside the foam line.
+vec4 swash(vec2 xz, float L, float t){
+  if (L > 4.5) return vec4(0.0);
+  if (L < -10.0) return vec4(1.0, 0.0, 0.0, 0.0);
+  float seed = vnoise(xz * 0.05 + 3.1);
+  float ph = fract(t / 8.0 + seed * 2.3);
+  const float UP = 0.4;
+  float s = ph < UP ? 1.0 - pow(1.0 - ph / UP, 2.2) : pow(1.0 - (ph - UP) / (1.0 - UP), 1.5);
+  float cusp = 0.7 + 0.55 * vnoise(xz * 0.21 + seed * 9.0);
+  float reach = 2.3 * cusp;
+  float R = 0.1 + reach * s;
+  float wig = (vnoise(xz * 1.3 + vec2(t * 0.04, 0.0)) - 0.5) * 0.35 + (vnoise(xz * 3.7) - 0.5) * 0.12;
+  float e = L - R + wig; // < 0 under the water
+  float cover = 1.0 - smoothstep(-0.04, 0.02, e);
+  float advancing = 1.0 - smoothstep(UP - 0.08, UP + 0.02, ph);
+
+  // Leading foam line: thick and bright while running up, thinning as it drains.
+  float lineW = 0.09 + 0.22 * advancing;
+  float line = smoothstep(-lineW, -lineW * 0.25, e) * (1.0 - smoothstep(-0.02, 0.015, e));
+  line *= 0.75 + 0.25 * vnoise(xz * 9.0); // uneven thickness, like the reference
+
+  // Foam behind the front: dense and spongy right behind it (white with small bubble
+  // holes), thinning seaward into a lace of strands, then breaking up into streaks.
+  // Strand width follows foam density, so one Voronoi pattern covers the whole range.
+  float behind = max(-e, 0.0);
+  float patchy = vnoise(xz * 0.9 + vec2(t * 0.05, -t * 0.03)) * 0.6 + vnoise(xz * 2.4 - t * 0.04) * 0.4;
+  float dens = exp(-behind * 1.15) * (0.45 + 0.55 * s) * smoothstep(0.15, 0.6, patchy + 0.25 * exp(-behind * 1.5));
+  // Surf lace drifting through the shallows, only in water and only in places.
+  float surf = (1.0 - smoothstep(-6.0, -0.5, L)) * smoothstep(-12.0, -6.0, L) *
+               smoothstep(0.62, 0.85, vnoise(vec2(L * 0.7 - t * 0.3, (xz.x + xz.y) * 0.07))) * 0.45;
+  dens = max(dens * cover, surf);
+  // Warp the lookup so cells are organic and strands wavy, not polygons.
+  vec2 p = xz * 2.2 + vec2(t * 0.02, t * 0.035);
+  p += (vec2(vnoise(xz * 1.1 + 3.0), vnoise(xz * 1.1 - 5.0)) - 0.5) * 1.6;
+  p += (vec2(vnoise(xz * 4.3 + t * 0.1), vnoise(xz * 4.3 + 9.0)) - 0.5) * 0.45;
+  vec2 vA = voronoi2(p, t * 0.2);
+  vec2 vB = voronoi2(p * 2.4 + 4.0, t * 0.25);
+  float width = mix(0.02, 0.45, dens);
+  float strands = max(1.0 - smoothstep(width * 0.55, width, vA.y), (1.0 - smoothstep(width * 0.45, width * 0.9, vB.y)) * 0.85);
+  // Small round bubble holes pitting the dense foam.
+  vec2 vC = voronoi2(xz * 14.0 + p * 0.5, t * 0.6);
+  float holes = (1.0 - smoothstep(0.12, 0.26, vC.x)) * smoothstep(0.35, 0.85, dens) * smoothstep(0.35, 0.65, vnoise(xz * 5.0 + 1.0));
+  float lace = strands * smoothstep(0.02, 0.2, dens) * (1.0 - holes * 0.9);
+  float foam = clamp(max(line, lace * (0.6 + 0.4 * dens)), 0.0, 1.0);
+
+  float wet = 1.0 - smoothstep(reach - 0.1, reach + 0.8, L + wig);
+  float rimLine = smoothstep(0.0, 0.03, e) * (1.0 - smoothstep(0.03, 0.12, e)) * (0.4 + 0.6 * advancing);
+  return vec4(cover, foam, wet, rimLine);
+}
+// Foam colour: bright but lit by the twilight, warmer toward the sun.
+vec3 foamShade(vec3 base, vec3 V){
+  float sd = max(dot(V, uSunDir), 0.0);
+  return base * 0.78 + uFogGlow * (0.08 + 0.35 * pow(sd, 6.0));
+}
+// Foam with a little tonal variation and soft relief (thicker foam catches more light).
+vec3 foamShadeAt(vec3 base, vec3 V, vec2 xz, float amt){
+  float v = 0.86 + 0.14 * vnoise(xz * 7.0) ;
+  return foamShade(base, V) * v * (0.85 + 0.15 * amt);
+}
+`

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { flowerShadeGLSL, flowerUniforms, lilyGeometry, toInstanced } from './flower'
 import { fogGLSL, noiseGLSL } from './glsl'
-import { PIANO_POS, color, hideInReflection, shared } from './world'
+import { BEDS } from './beds'
+import { PIANO_POS, color, hideInReflection, landDist, shared } from './world'
 
 // Shared stem maths: wind-bent curve from the ground (t = 0) to the flower head (t = 1).
 const stemGLSL = /* glsl */ `
@@ -172,6 +173,45 @@ function scatter(rand) {
   }
   addClusters(16, 2, 5, 0) // dark lilies
   addClusters(20, 4, 8, 1) // small glowing bells
+
+  // Lily beds: loose, irregular patches, denser in the middle and ragged at the edges.
+  // `short` is for flowers growing out of sand (shorter stems).
+  let group = -1
+  const addBed = (cx, cz, rx, rz, lilies, bells, short = false) => {
+    const add = (kind, count) => {
+      let placed = 0
+      for (let tries = 0; placed < count && tries < count * 20; tries++) {
+        // Points pulled toward the centre (sqrt bias reversed) with a wobbly outline.
+        const a = rand() * Math.PI * 2
+        const r = Math.pow(rand(), 0.6) * (0.8 + 0.3 * Math.sin(a * 3 + cx) + 0.12 * Math.sin(a * 7 + cz))
+        const x = cx + Math.cos(a) * r * rx
+        const z = cz + Math.sin(a) * r * rz
+        if (blocked(x, z) || landDist(x, z) < 1.2 || Math.hypot(x - 31, z + 38) < 1.6) continue
+        const leanAng = rand() * Math.PI * 2
+        const lean = (kind ? 0.06 : 0.08) * rand()
+        // Taller in the middle of the bed, shorter toward its edge, like a real planting.
+        const h = (short ? 0.65 : 1) * (1.1 - 0.35 * r)
+        items.push({
+          group,
+          base: [x, 0, z],
+          params: [
+            rand() * Math.PI * 2,
+            (kind ? 0.2 + rand() * 0.22 : 0.42 + rand() * 0.3) * h,
+            kind ? 0.05 + rand() * 0.025 : 0.11 + rand() * 0.06,
+            kind,
+          ],
+          lean: [Math.cos(leanAng) * lean, Math.sin(leanAng) * lean, kind ? 0.5 + rand() * 0.5 : 0.15 + rand() * 0.45, rand()],
+        })
+        placed++
+      }
+    }
+    add(0, lilies)
+    add(1, bells)
+  }
+  BEDS.forEach(([cx, cz, rx, rz, lilies, bells, short], i) => {
+    group = i
+    addBed(cx, cz, rx, rz, lilies, bells, short)
+  })
   return items
 }
 
@@ -184,28 +224,43 @@ function seeded(seed) {
 }
 
 export default function FieldFlowers() {
-  const { heads, stems } = useMemo(() => {
+  // One mesh pair per group (the scatter round the piano, then each bed), each with its own
+  // bounds so off-screen beds are skipped. Beds use a mid-detail lily (they hold most of
+  // the flowers); the few round the piano keep full detail.
+  const groups = useMemo(() => {
     const items = scatter(seeded(20261101))
-    const base = new Float32Array(items.length * 3)
-    const params = new Float32Array(items.length * 4)
-    const lean = new Float32Array(items.length * 4)
-    items.forEach((it, i) => {
-      base.set(it.base, i * 3)
-      params.set(it.params, i * 4)
-      lean.set(it.lean, i * 4)
+    const full = lilyGeometry()
+    const mid = lilyGeometry({ detail: 'mid' })
+    const ids = [...new Set(items.map((it) => it.group ?? -1))]
+    return ids.map((id) => {
+      const list = items.filter((it) => (it.group ?? -1) === id)
+      const base = new Float32Array(list.length * 3)
+      const params = new Float32Array(list.length * 4)
+      const lean = new Float32Array(list.length * 4)
+      const box = new THREE.Box3()
+      list.forEach((it, i) => {
+        base.set(it.base, i * 3)
+        params.set(it.params, i * 4)
+        lean.set(it.lean, i * 4)
+        box.expandByPoint(new THREE.Vector3(...it.base))
+      })
+      const sphere = box.getBoundingSphere(new THREE.Sphere())
+      sphere.radius += 1.2
+      sphere.center.y += 0.4
+      const attrs = {
+        iBase: new THREE.InstancedBufferAttribute(base, 3),
+        iParams: new THREE.InstancedBufferAttribute(params, 4),
+        iLean: new THREE.InstancedBufferAttribute(lean, 4),
+      }
+      const heads = toInstanced(id === -1 ? full : mid)
+      const stems = stemGeometry()
+      for (const g of [heads, stems]) {
+        for (const [k, a] of Object.entries(attrs)) g.setAttribute(k, a)
+        g.instanceCount = list.length
+        g.boundingSphere = sphere
+      }
+      return { heads, stems }
     })
-    const attrs = {
-      iBase: new THREE.InstancedBufferAttribute(base, 3),
-      iParams: new THREE.InstancedBufferAttribute(params, 4),
-      iLean: new THREE.InstancedBufferAttribute(lean, 4),
-    }
-    const heads = toInstanced(lilyGeometry())
-    const stems = stemGeometry()
-    for (const g of [heads, stems]) {
-      for (const [k, a] of Object.entries(attrs)) g.setAttribute(k, a)
-      g.instanceCount = items.length
-    }
-    return { heads, stems }
   }, [])
 
   const materials = useMemo(() => {
@@ -234,8 +289,12 @@ export default function FieldFlowers() {
 
   return (
     <group ref={group}>
-      <mesh geometry={stems} material={materials.stem} frustumCulled={false} />
-      <mesh geometry={heads} material={materials.head} frustumCulled={false} />
+      {groups.map((g, i) => (
+        <group key={i}>
+          <mesh geometry={g.stems} material={materials.stem} />
+          <mesh geometry={g.heads} material={materials.head} />
+        </group>
+      ))}
     </group>
   )
 }

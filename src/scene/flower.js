@@ -15,9 +15,9 @@ const jitter = (k, salt) => {
 }
 
 export function lilyGeometry({ detail = 'full' } = {}) {
-  const full = detail === 'full'
-  const nv = full ? 10 : 5
-  const nu = full ? 5 : 3
+  const full = detail !== 'low' // 'full' and 'mid' keep stamens and pistil
+  const nv = detail === 'full' ? 10 : detail === 'mid' ? 7 : 5
+  const nu = detail === 'full' ? 5 : detail === 'mid' ? 4 : 3
   const positions = []
   const uvs = []
   const parts = []
@@ -123,7 +123,7 @@ export function lilyGeometry({ detail = 'full' } = {}) {
     strand([0, 0.4, 0.75, 1].map((t) => new THREE.Vector3(0.02 * t, 0.02 + t * 0.56, 0.01 * t)), 0.011, PARTS.pistil)
     for (let l = 0; l < 3; l++) {
       const a = (l / 3) * Math.PI * 2
-      const lobe = new THREE.SphereGeometry(0.018, 8, 6)
+      const lobe = detail === 'full' ? new THREE.SphereGeometry(0.018, 8, 6) : new THREE.SphereGeometry(0.018, 5, 3)
       lobe.translate(0.02 + Math.cos(a) * 0.016, 0.585, 0.01 + Math.sin(a) * 0.016)
       const lp = lobe.attributes.position
       const base = positions.length / 3
