@@ -1,8 +1,8 @@
 // Picks a rendering tier once at startup. Override with ?quality=low|mid|high.
 const TIERS = {
-  high: { grass: 70000, petals: 3000, dpr: [1, 2], multisampling: 4, reflection: 0.5 },
-  mid: { grass: 36000, petals: 1500, dpr: [1, 1.5], multisampling: 0, reflection: 0.35 },
-  low: { grass: 20000, petals: 600, dpr: [1, 1.25], multisampling: 0, reflection: 0 },
+  high: { grass: 70000, petals: 2400, dpr: [1, 2], multisampling: 4, reflection: 0.5 },
+  mid: { grass: 36000, petals: 1200, dpr: [1, 1.5], multisampling: 4, reflection: 0.35 },
+  low: { grass: 20000, petals: 480, dpr: [1, 1.25], multisampling: 0, reflection: 0 },
 }
 
 function pickTier() {

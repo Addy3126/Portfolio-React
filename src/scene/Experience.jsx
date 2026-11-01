@@ -5,6 +5,7 @@ import { BlendFunction, ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import { bloomEnabled, quality } from '../quality'
 import CameraRig from './CameraRig'
+import FieldFlowers from './FieldFlowers'
 import Grass from './Grass'
 import Ground from './Ground'
 import Petals from './Petals'
@@ -46,6 +47,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       <Sea />
       <Ground />
       <Grass count={quality.grass} />
+      <FieldFlowers />
       <Petals count={quality.petals} />
       <Ruins hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano />
