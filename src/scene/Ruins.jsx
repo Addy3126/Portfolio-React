@@ -2,9 +2,10 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { fogGLSL } from './glsl'
+import { plateauTopAt } from './Plateau'
 import { headlandTopAt } from './Rocks'
 import { buildTower, buildingMaterial } from './ruins/buildings'
-import { HEADLAND_BUILDINGS, SLABS, TOWERS } from './ruins/layout'
+import { HEADLAND_BUILDINGS, PLATEAU_BUILDINGS, SLABS, TOWERS } from './ruins/layout'
 import { seeded } from './ruins/noise3'
 import { color, shared } from './world'
 
@@ -108,6 +109,10 @@ export default function Ruins({ hovered, selected, onHover, onSelect }) {
     () => HEADLAND_BUILDINGS.map((b) => ({ spec: b, baseY: (headlandTopAt(b.x, b.z) ?? 8) - 0.8 })),
     [],
   )
+  // Towers that fall on the plateau stand on its surface; plus the ruins along its terraces.
+  const towerBase = useMemo(() => TOWERS.map((t) => { const top = plateauTopAt(t.x, t.z); return top === null ? 0 : top - 0.5 }), [])
+  const plateau = useMemo(() => PLATEAU_BUILDINGS.map((b) => ({ spec: b, baseY: (plateauTopAt(b.x, b.z) ?? 0) - 0.5 })), [])
+  const slabs = useMemo(() => SLABS.filter(([x, z]) => plateauTopAt(x, z) === null), [])
 
   return (
     <group>
@@ -116,6 +121,7 @@ export default function Ruins({ hovered, selected, onHover, onSelect }) {
           key={i}
           index={i}
           spec={t}
+          baseY={towerBase[i]}
           state={t.project === undefined ? 'idle' : selected === t.project ? 'selected' : hovered === t.project ? 'hover' : 'idle'}
           onHover={onHover}
           onSelect={onSelect}
@@ -124,7 +130,10 @@ export default function Ruins({ hovered, selected, onHover, onSelect }) {
       {headland.map((h, i) => (
         <Building key={`h${i}`} index={100 + i} spec={h.spec} baseY={h.baseY} state="idle" onHover={onHover} onSelect={onSelect} />
       ))}
-      {SLABS.map(([x, z, w, h, d, ry, rz], i) => (
+      {plateau.map((p, i) => (
+        <Building key={`p${i}`} index={200 + i} spec={p.spec} baseY={p.baseY} state="idle" onHover={onHover} onSelect={onSelect} />
+      ))}
+      {slabs.map(([x, z, w, h, d, ry, rz], i) => (
         <mesh key={`s${i}`} material={materials.concrete} position={[x, h * 0.2, z]} rotation={[0, ry, rz]}>
           <boxGeometry args={[w, h, d]} />
         </mesh>

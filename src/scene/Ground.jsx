@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { fogGLSL, noiseGLSL, shadowGLSL, shoreGLSL } from './glsl'
-import { color, palette, shared, shoreZ } from './world'
+import { color, landDist, palette, shared } from './world'
 
 const vertex = /* glsl */ `
 varying vec3 vWorld;
@@ -34,7 +34,7 @@ void main(){
   vec3 col = mix(cNear, cFar, smoothstep(2.0, 18.0, dist));
 
   // Beach: a strip of sand between the grass and the water.
-  float inland = vWorld.z - shoreZ(vWorld.x); // metres from the waterline (negative = under water)
+  float inland = landDist(vWorld.xz); // metres from the waterline (negative = under water)
   float beach = 1.0 - smoothstep(0.55, 0.95, inland);
   vec3 sand = cSand * (0.85 + 0.3 * vnoise(vWorld.xz * 3.0));
   // Wet sand where the wash recently reached; the reach moves with the swell.
@@ -67,14 +67,15 @@ void main(){
 
 export default function Ground() {
   const geometry = useMemo(() => {
-    const g = new THREE.PlaneGeometry(140, 26, 280, 104)
+    // Covers the field, the spit (to z = -66) and the channel bank on the left.
+    const g = new THREE.PlaneGeometry(140, 80, 280, 200)
     g.rotateX(-Math.PI / 2)
-    g.translate(0, 0, -1)
+    g.translate(0, 0, -28)
     const pos = g.attributes.position
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i)
       const z = pos.getZ(i)
-      const below = shoreZ(x) - z // > 0 past the shoreline
+      const below = -landDist(x, z) // > 0 past the waterline
       const y = below > 0 ? -Math.min(0.45, below * 0.22) : Math.sin(x * 0.3) * Math.cos(z * 0.4) * 0.04 * Math.min(1, -below)
       pos.setY(i, y)
     }

@@ -85,8 +85,8 @@ void main(){
   albedo *= 1.0 - 0.45 * (1.0 - smoothstep(0.0, 0.07, cr)) * detail;
 
   // Frost and lichen on upward faces.
-  float up = smoothstep(0.55, 0.85, N.y) * smoothstep(0.35, 0.6, vnoise(vWorld.xz * 1.7));
-  albedo = mix(albedo, cFrostR, up * 0.65);
+  float up = smoothstep(0.55, 0.85, N.y) * smoothstep(0.3, 0.7, vnoise(vWorld.xz * 0.25) * 0.7 + vnoise(vWorld.xz * 1.1) * 0.3);
+  albedo = mix(albedo, cFrostR, up * 0.55);
 
   // Waterline: dark wet band, then a faint salt crust above it.
   albedo = mix(albedo, cWet, 1.0 - smoothstep(0.05, 0.6, h));

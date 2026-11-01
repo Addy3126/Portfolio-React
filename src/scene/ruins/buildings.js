@@ -109,23 +109,27 @@ export function buildTower(spec, rand) {
     box(0, n * fh + 0.75, 0, w + 0.1, 0.7, d + 0.1, KIND.wall)
   }
 
-  // A few vines trailing down the walls.
-  const vines = 2 + Math.floor(rand() * 3)
+  // Vines trailing down the walls and over ledges.
+  const vines = 5 + Math.floor(rand() * 5)
   for (let v = 0; v < vines; v++) {
     const si = Math.floor(rand() * 4)
     const side = sides[si]
     const cols = tops[si].length
     const c = Math.floor(rand() * cols)
     const yStart = (tops[si][c] + 1) * fh - 0.2
-    const len = Math.min(yStart - 0.5, 2.5 + rand() * 5)
-    if (len < 1) continue
-    const u = -side.len / 2 + (c + 0.2 + rand() * 0.6) * (side.len / cols)
+    const len = Math.min(yStart - 0.5, 4 + rand() * 8)
+    if (len < 1.5) continue
+    const u = -side.len / 2 + (c + 0.15 + rand() * 0.7) * (side.len / cols)
+    const segs = 6
     let drift = 0
-    for (let s = 0; s < 4; s++) {
-      const segLen = len / 4
-      drift += (rand() - 0.5) * 0.25
-      faceBox(side, u + drift, yStart - segLen * (s + 0.5), 0.12 + rand() * 0.1, segLen, 0.05, -0.04, KIND.vine)
-      faceBox(side, u + drift + (rand() - 0.5) * 0.4, yStart - segLen * (s + 0.5 + rand() * 0.4), 0.3 + rand() * 0.25, 0.22 + rand() * 0.2, 0.08, -0.07, KIND.vine, (rand() - 0.5) * 0.8)
+    for (let sgm = 0; sgm < segs; sgm++) {
+      const segLen = len / segs
+      const yc = yStart - segLen * (sgm + 0.5)
+      drift += (rand() - 0.5) * 0.35
+      const taper = 1 - (sgm / segs) * 0.5
+      faceBox(side, u + drift, yc, (0.25 + rand() * 0.2) * taper, segLen * 1.05, 0.06, -0.05, KIND.vine)
+      for (let l = 0; l < 2; l++)
+        faceBox(side, u + drift + (rand() - 0.5) * 0.9 * taper, yc + (rand() - 0.5) * segLen, (0.6 + rand() * 0.5) * taper, 0.4 + rand() * 0.35, 0.1, -0.09, KIND.vine, (rand() - 0.5) * 0.9)
     }
   }
 
@@ -244,7 +248,7 @@ export function buildingMaterial(style) {
       cSlab: { value: color('#2f2c46') },
       cCore: { value: color('#07060e') },
       cRebar: { value: color('#3a2420') },
-      cVine: { value: color('#1d2a3c') },
+      cVine: { value: color('#2c4352') },
       cFrostB: { value: color('#8f88c4') },
       cWetB: { value: color('#141633') },
       cSaltB: { value: color('#b9b2d6') },

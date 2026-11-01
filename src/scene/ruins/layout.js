@@ -31,6 +31,17 @@ export const HEADLAND_BUILDINGS = [
   { x: 240, z: -248, w: 5, d: 5, h: 11, broken: true, style: 'stone' },
 ]
 
+// Ruins along the terraces of the rock plateau on the left (base height from the rock).
+export const PLATEAU_BUILDINGS = [
+  { x: -47, z: -62, w: 6, d: 6, h: 12, broken: true, style: 'stone' },
+  { x: -60, z: -100, w: 8, d: 7, h: 18, style: 'brick' },
+  { x: -55, z: -138, w: 5, d: 5, h: 10, broken: true, style: 'concrete' },
+  { x: -95, z: -78, w: 9, d: 8, h: 22, broken: true, style: 'concrete' },
+  { x: -82, z: -185, w: 7, d: 7, h: 16, style: 'stone' },
+  { x: -150, z: -110, w: 8, d: 8, h: 20, broken: true, style: 'brick' },
+  { x: -230, z: -205, w: 10, d: 9, h: 26, broken: true, style: 'concrete' },
+]
+
 // Fallen slabs lying in the water: [x, z, width, height, depth, rotY, rotZ]
 export const SLABS = [
   [-36, -205, 14, 2.4, 5, 0.4, 0.12],
