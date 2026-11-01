@@ -4,12 +4,13 @@ import { fogGLSL, noiseGLSL } from './glsl'
 import { inside, offset } from './piano/geometry'
 import { fbm3, seeded } from './ruins/noise3'
 import { rockGeometry, rockMaterial } from './ruins/rocks'
+import { cullHidden } from './visibility'
 import { color, shared } from './world'
 
-// The rock plateau on the left: stacked, angular rock "planes" stepping back in terraces,
-// with ruins on top. Its front edge is an arc at a constant distance from the cameras
-// (about as far as the ruins by the sun), running from just left of the sun out past the
-// left edge of the screen and around behind, so it never comes close and never ends in view.
+// The rock plateau on the left: a few irregular rock layers with ruins on top. Its front
+// edge is an arc at a constant distance from the cameras (about as far as the ruins by the
+// sun), spanning just the bearings the cameras can see: from left of the sun to past the
+// left edge of the widest screen. Its depth is finite and faces no camera can see are culled.
 
 const CAM = [0, 9] // landing camera (x, z)
 const RADIUS = 275
@@ -19,23 +20,25 @@ export const polar = (r, deg) => {
   return [CAM[0] + r * Math.sin(t), CAM[1] - r * Math.cos(t)]
 }
 
-// Front edge, from behind-left round to just left of the sun.
+const LEFT_DEG = -66 // past the left edge of a 32:9 screen at the landing stop
+const RIGHT_DEG = -12
+const DEPTH = 70
+
+// Front edge, from the far left round to just left of the sun.
 const FRONT = []
-for (let deg = -120; deg <= -9; deg += 3) {
+for (let deg = LEFT_DEG; deg <= RIGHT_DEG; deg += 2) {
   const wobble = 10 * Math.sin(deg * 0.21) + 6 * Math.sin(deg * 0.57 + 1)
   FRONT.push(polar(RADIUS + wobble, deg))
 }
-const BACK = [polar(900, -6), [-1100, -900], [-1100, 600], polar(400, -125)]
+// Back edge: the same arc further out, walked the other way to close the outline.
+const BACK = []
+for (let deg = RIGHT_DEG + 2; deg >= LEFT_DEG - 4; deg -= 6) BACK.push(polar(RADIUS + DEPTH, deg))
 
 // Layers: [inset from the front edge (m), bottom y, top y]
 const LAYERS = [
-  [0, -1.2, 1.8],
-  [1.5, 1.8, 3.8],
-  [3.2, 3.8, 5.5],
-  [5.5, 5.5, 7.8],
-  [8.5, 7.8, 10],
-  [12.5, 10, 12.5],
-  [18, 12.5, 15.5],
+  [0, -1.2, 4.2],
+  [5, 4.2, 8.6],
+  [14, 8.6, 13.5],
 ]
 
 // Resample the front edge every ~6 m and jitter it sideways into angular, broken facets.
@@ -46,7 +49,7 @@ function frontOutline(seed, amount) {
     const [bx, bz] = FRONT[i + 1]
     const len = Math.hypot(bx - ax, bz - az)
     const bearing = (Math.atan2(ax - CAM[0], CAM[1] - az) * 180) / Math.PI
-    const steps = Math.max(1, Math.round(len / (Math.hypot(ax, az) > 500 ? 40 : bearing < -80 ? 10 : 2.5)))
+    const steps = Math.max(1, Math.round(len / 2.5))
     const nx = -(bz - az) / len
     const nz = (bx - ax) / len
     for (let s = 0; s < steps; s++) {
@@ -153,18 +156,20 @@ export default function Plateau() {
   const { meshes } = useMemo(() => {
     const mat = rockMaterial()
     const list = []
+    const culled = (g) => {
+      const out = cullHidden(g)
+      g.dispose()
+      return out
+    }
     LAYERS.forEach(([, y0, y1], i) => {
-      list.push(new THREE.Mesh(extrudeXZ(layerOutlines[i], y0, y1, 0.6), mat))
-      // Overhang: a thinner ledge at the top of the layer that juts out past the wall.
-      if (i < LAYERS.length - 1) {
-        const lipH = Math.min(0.8, (y1 - y0) * 0.3)
-        list.push(new THREE.Mesh(extrudeXZ(offset(layerOutlines[i], -(0.7 + 0.15 * i)), y1 - lipH, y1 + 0.1, 0.8), mat))
-      }
+      list.push(new THREE.Mesh(culled(extrudeXZ(layerOutlines[i], y0, y1, 1.3)), mat))
+      // Overhang: a ledge jutting out at the top of the lowest layer.
+      if (i === 0) list.push(new THREE.Mesh(culled(extrudeXZ(offset(layerOutlines[0], -1.1), y1 - 0.9, y1 + 0.1, 1.1)), mat))
     })
 
     // Sand apron in front of the lowest layer.
     const sand = new THREE.Mesh(
-      extrudeXZ(offset(layerOutlines[0], -3), -0.7, 0.08),
+      culled(extrudeXZ(offset(layerOutlines[0], -3), -0.7, 0.08)),
       new THREE.ShaderMaterial({
         vertexShader: sandVertex,
         fragmentShader: sandFragment,
@@ -177,12 +182,11 @@ export default function Plateau() {
     const rand = seeded(777)
     const massGeo = rockGeometry(21, { detail: 5, flatTop: 0.7, terrace: 0.3, rough: 0.9, cliff: 0.45, faceted: false, fine: 0.12 })
     for (const [r, deg, sx, sy, sz] of [
-      [300, -14, 13, 17, 11],
-      [312, -30, 20, 23, 16],
-      [330, -45, 28, 30, 20],
-      [318, -58, 17, 20, 14],
-      [345, -22, 22, 26, 18],
-      [360, -70, 35, 35, 25],
+      [300, -16, 13, 15, 11],
+      [312, -30, 20, 19, 16],
+      [325, -45, 26, 22, 20],
+      [310, -57, 16, 16, 14],
+      [330, -24, 20, 20, 16],
     ]) {
       const [x, z] = polar(r, deg)
       const m = new THREE.Mesh(massGeo, mat)
@@ -196,7 +200,7 @@ export default function Plateau() {
     const slabGeo = rockGeometry(31, { detail: 2, flatTop: 0.15, terrace: 0, rough: 1.2, cliff: 0.3 })
     const items = []
     for (let i = 0; i < 70; i++) {
-      const [x, z] = polar(RADIUS + 3 + rand() * 30, -10 - rand() * 60)
+      const [x, z] = polar(RADIUS + 3 + rand() * 30, RIGHT_DEG - 2 - rand() * (RIGHT_DEG - LEFT_DEG - 6))
       const top = plateauTopAt(x, z)
       if (top === null) continue
       const s = 0.8 + rand() * 3
@@ -217,7 +221,7 @@ export default function Plateau() {
     // just in front of the next wall up. Only along the stretch the cameras can see.
     const visible = (p) => {
       const deg = (Math.atan2(p.x - CAM[0], CAM[1] - p.y) * 180) / Math.PI
-      return deg > -75 && deg < -5 && Math.hypot(p.x - CAM[0], p.y - CAM[1]) < 340
+      return deg > LEFT_DEG && deg < RIGHT_DEG + 2 && Math.hypot(p.x - CAM[0], p.y - CAM[1]) < RADIUS + 40
     }
     const blocks = []
     const debris = []

@@ -36,7 +36,13 @@ export function spitDist(x, z) {
   return best
 }
 // Metres from the nearest waterline (negative = under water).
-export const landDist = (x, z) => Math.max(mainDist(x, z), spitDist(x, z))
+// Smooth union of the field and the spit, so the coast flows round where they meet.
+const SHORE_BLEND = 9
+function smax(a, b, k) {
+  const h = Math.min(1, Math.max(0, 0.5 + (0.5 * (a - b)) / k))
+  return b + (a - b) * h + k * h * (1 - h)
+}
+export const landDist = (x, z) => smax(mainDist(x, z), spitDist(x, z), SHORE_BLEND)
 // Grass stops this far inland from the waterline, leaving a strip of beach.
 export const BEACH_WIDTH = 3.2
 // Centre of the piano case in world x/z.

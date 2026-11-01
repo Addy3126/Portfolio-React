@@ -18,6 +18,20 @@ import Sea from './Sea'
 import Sky from './Sky'
 import { SUN_DIR, shared } from './world'
 
+// Debug: ?stats=1 exposes per-frame render counts as window.__stats.
+const statsOn = new URLSearchParams(window.location.search).get('stats') === '1'
+function Stats() {
+  // Count the whole frame (all passes), not just the last render call.
+  useFrame(({ gl }) => {
+    gl.info.autoReset = false
+    gl.info.reset()
+  }, -1000)
+  useFrame(({ gl }) => {
+    window.__stats = { triangles: gl.info.render.triangles, calls: gl.info.render.calls }
+  }, 1000)
+  return null
+}
+
 function Clock({ onReady }) {
   const frames = useRef(0)
   useFrame(({ clock }) => {
@@ -44,6 +58,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       {debug.fps > 0 && <FrameLimiter fps={debug.fps} />}
       {autoQualityEnabled && debug.fps > 0 && <AutoQuality level={level} onLevel={setLevel} fps={debug.fps} />}
       <Clock onReady={onReady} />
+      {statsOn && <Stats />}
       <CameraRig />
       <CursorField />
       {debug.shadow && <PianoShadow />}

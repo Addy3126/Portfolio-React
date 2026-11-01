@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { fogGLSL, noiseGLSL, shadowGLSL, shoreGLSL } from './glsl'
+import { cullHidden } from './visibility'
 import { color, landDist, palette, shared } from './world'
 
 const vertex = /* glsl */ `
@@ -87,7 +88,9 @@ export default function Ground() {
       pos.setY(i, y)
     }
     g.computeVertexNormals()
-    return g
+    const out = cullHidden(g) // ground under the (opaque) sea is never seen
+    g.dispose()
+    return out
   }, [])
 
   const material = useMemo(
