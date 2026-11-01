@@ -4,6 +4,7 @@ import { TOWERS } from './ruins/layout'
 import { seeded } from './ruins/noise3'
 import { rockGeometry, rockMaterial } from './ruins/rocks'
 import { plateauTopAt } from './Plateau'
+import { cullHidden } from './visibility'
 import { bankX, shoreZ, spitHalfWidth, spitPoint } from './world'
 
 // The headland: two large rock masses (shared with Ruins, which builds on top of them).
@@ -16,7 +17,7 @@ export function headlandMeshes() {
   if (!headlandCache) {
     const mat = rockMaterial()
     headlandCache = HEADLAND.map((h) => {
-      const m = new THREE.Mesh(rockGeometry(h.seed, { detail: 6, flatTop: 0.7, terrace: 0.3, rough: 0.9, cliff: 0.4, faceted: false, fine: 0.12 }), mat)
+      const m = new THREE.Mesh(rockGeometry(h.seed, { detail: 5, flatTop: 0.7, terrace: 0.3, rough: 0.9, cliff: 0.4, faceted: false, fine: 0.12 }), mat)
       m.position.set(...h.position)
       m.scale.set(...h.scale)
       m.rotation.y = h.rotY
@@ -134,7 +135,16 @@ export default function Rocks() {
         return mesh
       })
       .filter(Boolean)
-    return { headland: headlandMeshes(), groups }
+    // Display copies of the headland without faces no camera can see (the full meshes are
+    // kept for raycasting building heights).
+    const headland = headlandMeshes().map((src) => {
+      const m = new THREE.Mesh(cullHidden(src.geometry, src.matrixWorld), src.material)
+      m.position.copy(src.position)
+      m.rotation.copy(src.rotation)
+      m.scale.copy(src.scale)
+      return m
+    })
+    return { headland, groups }
   }, [])
 
   return (

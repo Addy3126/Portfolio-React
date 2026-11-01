@@ -55,7 +55,8 @@ float spitDist(vec2 xz){
   return best;
 }
 // Metres from the nearest waterline (negative = under water).
-float landDist(vec2 xz){ return max(mainDist(xz), spitDist(xz)); }
+float smaxk(float a, float b, float k){ float h = clamp(0.5 + 0.5 * (a - b) / k, 0.0, 1.0); return mix(b, a, h) + k * h * (1.0 - h); }
+float landDist(vec2 xz){ return smaxk(mainDist(xz), spitDist(xz), 9.0); }
 // Ground height past the waterline (slopes into the sea), 0 inland.
 float seabedY(vec2 xz){ float below = -landDist(xz); return below > 0.0 ? -min(0.45, below * 0.22) : 0.0; }
 `
@@ -82,5 +83,23 @@ float pianoContact(vec2 xz){
   float e = length((xz - vec2(-1.45, 3.7)) / vec2(1.45, 0.85));
   float bench = length((xz - vec2(-3.33, 3.7)) / vec2(0.32, 0.55));
   return (1.0 - 0.45 * (1.0 - smoothstep(0.55, 1.35, e))) * (1.0 - 0.3 * (1.0 - smoothstep(0.6, 1.4, bench)));
+}
+`
+
+// 3D value noise for surface detail that doesn't stretch on steep faces.
+export const noise3GLSL = /* glsl */ `
+float hash13(vec3 p){ p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
+float vnoise3(vec3 p){
+  vec3 i = floor(p), f = fract(p);
+  vec3 u = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(mix(hash13(i), hash13(i + vec3(1,0,0)), u.x), mix(hash13(i + vec3(0,1,0)), hash13(i + vec3(1,1,0)), u.x), u.y),
+    mix(mix(hash13(i + vec3(0,0,1)), hash13(i + vec3(1,0,1)), u.x), mix(hash13(i + vec3(0,1,1)), hash13(i + vec3(1,1,1)), u.x), u.y),
+    u.z);
+}
+float fbm3g(vec3 p){
+  float v = 0.0, a = 0.5;
+  for (int i = 0; i < 4; i++){ v += a * vnoise3(p); p = p * 2.03 + vec3(11.3, 7.1, 3.7); a *= 0.5; }
+  return v;
 }
 `

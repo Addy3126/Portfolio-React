@@ -7,6 +7,7 @@ import { headlandTopAt } from './Rocks'
 import { buildTower, buildingMaterial } from './ruins/buildings'
 import { HEADLAND_BUILDINGS, PLATEAU_BUILDINGS, SLABS, TOWERS } from './ruins/layout'
 import { seeded } from './ruins/noise3'
+import { cullHidden } from './visibility'
 import { color, shared } from './world'
 
 export { TOWERS }
@@ -60,7 +61,19 @@ function windowGeometry(windows) {
 }
 
 function Building({ spec, index, baseY = 0, state, onHover, onSelect }) {
-  const built = useMemo(() => buildTower(spec, seeded(1000 + index * 37)), [spec, index])
+  const built = useMemo(() => {
+    const b = buildTower(spec, seeded(1000 + index * 37))
+    // Drop faces no camera can see (back walls, undersides, anything under the sea).
+    const [tz = 0, tx = 0] = spec.tilt || []
+    const m = new THREE.Matrix4().compose(
+      new THREE.Vector3(spec.x, baseY - (spec.sunk || 0), spec.z),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(tx, 0, tz)),
+      new THREE.Vector3(1, 1, 1),
+    )
+    const geometry = cullHidden(b.geometry, m)
+    b.geometry.dispose()
+    return { ...b, geometry }
+  }, [spec, index, baseY])
   const interactive = spec.project !== undefined
   const windowMat = useMemo(
     () =>
