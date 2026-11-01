@@ -121,7 +121,6 @@ varying vec3 vWorld;
 varying vec3 vNormal;
 varying vec3 vPatch;
 float spow(float x, float e){ return pow(max(x, 0.0), e); }
-float hash12(vec2 p){ vec3 p3 = fract(vec3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 ${fogGLSL}
 void main(){
   float t = clamp(vT, 0.0, 1.0);
@@ -142,9 +141,9 @@ void main(){
   float wrap = max((dot(N, L) + 0.5) / 1.5, 0.0);
   float through = spow(dot(V, L), 3.0) * (0.35 + 0.65 * t);
   vec3 H = normalize(L - V);
-  float spec = spow(dot(N, H), 48.0) * t;
+  float spec = spow(dot(N, H), 12.0) * t;
 
-  vec3 col = albedo * (ambient + cSun * wrap * 0.45) + albedo * cSun * through * 1.4 + cSun * spec * 0.25;
+  vec3 col = albedo * (ambient + cSun * wrap * 0.45) + albedo * cSun * through * 1.4 + cSun * spec * 0.08;
 
   // Frost on the upper blade, heavier in frosty patches.
   float frost = smoothstep(0.3, 0.95, t) * (0.55 + 0.45 * smoothstep(0.35, 0.7, vPatch.x));
@@ -154,11 +153,11 @@ void main(){
   // Ambient occlusion: dark at the roots.
   col *= mix(0.22, 1.0, smoothstep(0.0, 0.55, t));
 
-  // Frost glints that twinkle as the camera moves.
-  vec2 cell = floor(vWorld.xz * 45.0 + vWorld.y * 45.0);
-  float g = fract(hash12(cell) * 41.3 + dot(cameraPosition, vec3(0.83, 0.61, 0.47)) * 0.7 + uTime * uMotion * 0.06);
-  float glint = smoothstep(0.993, 1.0, g) * frost * (1.0 - smoothstep(6.0, 16.0, dist));
-  col += vec3(3.0, 2.9, 3.4) * glint;
+
+  // Far away, pull blades toward the field's average tone to stop shimmer.
+  float calm = smoothstep(5.0, 16.0, dist);
+  vec3 avg = mix(cTip, cFrost, 0.55) * (cSky * 0.9 + cSun * 0.15);
+  col = mix(col, avg, calm * 0.45);
 
   // Blue spill from the piano.
   float pd = length(vWorld.xz - uPianoPos.xz);
