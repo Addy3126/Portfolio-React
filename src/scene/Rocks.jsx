@@ -3,7 +3,8 @@ import * as THREE from 'three'
 import { TOWERS } from './ruins/layout'
 import { seeded } from './ruins/noise3'
 import { rockGeometry, rockMaterial } from './ruins/rocks'
-import { shoreZ } from './world'
+import { plateauTopAt } from './Plateau'
+import { bankX, shoreZ } from './world'
 
 // The headland: two large rock masses (shared with Ruins, which builds on top of them).
 export const HEADLAND = [
@@ -48,7 +49,7 @@ const STACKS = [
 function placements() {
   const rand = seeded(4242)
   const list = [] // [x, y, z, sx, sy, sz, rotY, variant]
-  for (const [x, z, sx, sy, sz] of STACKS) list.push([x, -0.5, z, sx, sy, sz, rand() * 6.28, Math.floor(rand() * 3)])
+  for (const [x, z, sx, sy, sz] of STACKS) if (plateauTopAt(x, z) === null) list.push([x, -0.5, z, sx, sy, sz, rand() * 6.28, Math.floor(rand() * 3)])
 
   // Fallen boulders around the headland's foot.
   for (const h of HEADLAND) {
@@ -61,20 +62,27 @@ function placements() {
 
   // Rubble and fallen blocks around each tower base.
   for (const t of TOWERS) {
+    const top = plateauTopAt(t.x, t.z)
     const n = 3 + Math.floor(rand() * 4)
     for (let i = 0; i < n; i++) {
       const a = rand() * Math.PI * 2
       const r = Math.max(t.w, t.d) * (0.55 + rand() * 0.5)
       const s = 0.8 + rand() * 2.2
-      list.push([t.x + Math.cos(a) * r, -0.3, t.z + Math.sin(a) * r, s * 1.3, s * (0.6 + rand() * 0.6), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
+      list.push([t.x + Math.cos(a) * r, top === null ? -0.3 : top - 0.2, t.z + Math.sin(a) * r, s * 1.3, s * (0.6 + rand() * 0.6), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
     }
   }
 
-  // Rocks along the beach and in the shallows.
+  // Rocks along the beach, the spit and the channel bank.
   for (let i = 0; i < 26; i++) {
-    const x = -26 + rand() * 52
+    const x = -20 + rand() * 66
     const z = shoreZ(x) - 0.6 + rand() * 1.4
     const s = 0.12 + rand() * rand() * 0.55
+    list.push([x, -0.05, z, s * 1.4, s * (0.7 + rand() * 0.6), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
+  }
+  for (let i = 0; i < 10; i++) {
+    const z = -14 + rand() * 24
+    const x = bankX(z) - 0.5 + rand() * 1.2
+    const s = 0.15 + rand() * rand() * 0.5
     list.push([x, -0.05, z, s * 1.4, s * (0.7 + rand() * 0.6), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
   }
   return list

@@ -7,8 +7,14 @@ export const SUN_DIR = new THREE.Vector3(Math.sin(0.192), 0.012, -Math.cos(0.192
 // Origin of the piano group: front edge of the keyboard. The body extends 2.3 m along +x.
 export const PIANO_POS = new THREE.Vector3(-2.55, 0, 3.7)
 
-// Wavy shoreline: grass grows where z > shoreZ(x).
-export const shoreZ = (x) => -8 + Math.sin(x * 0.15) * 1.2 + Math.sin(x * 0.37 + 1.3) * 0.5
+// Coastline. Keep in sync with shoreGLSL in glsl.js.
+// Front shore: a wavy line, plus a grassy spit reaching out toward the ruins on the right.
+export const shoreZ = (x) =>
+  -8 + Math.sin(x * 0.15) * 1.2 + Math.sin(x * 0.37 + 1.3) * 0.5 - 46 * Math.exp(-0.5 * ((x - 24) / 13) ** 2)
+// Left bank: a water channel separates the field from the rock plateau.
+export const bankX = (z) => -22 - 1.5 * Math.sin(z * 0.13) - 0.8 * Math.sin(z * 0.41 + 2.0)
+// Metres from the nearest waterline (negative = under water).
+export const landDist = (x, z) => Math.min(z - shoreZ(x), x - bankX(z))
 // Grass stops this far inland from the waterline, leaving a strip of beach.
 export const BEACH_WIDTH = 0.8
 // Centre of the piano case in world x/z.

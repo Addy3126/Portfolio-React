@@ -31,9 +31,15 @@ vec3 applyFog(vec3 col, float dist, vec3 V){
 
 // Analytic shoreline (matches shoreZ in world.js) and the beach/seabed height there.
 export const shoreGLSL = /* glsl */ `
-float shoreZ(float x){ return -8.0 + sin(x * 0.15) * 1.2 + sin(x * 0.37 + 1.3) * 0.5; }
+float shoreZ(float x){
+  float d = (x - 24.0) / 13.0;
+  return -8.0 + sin(x * 0.15) * 1.2 + sin(x * 0.37 + 1.3) * 0.5 - 46.0 * exp(-0.5 * d * d);
+}
+float bankX(float z){ return -22.0 - 1.5 * sin(z * 0.13) - 0.8 * sin(z * 0.41 + 2.0); }
+// Metres from the nearest waterline (negative = under water).
+float landDist(vec2 xz){ return min(xz.y - shoreZ(xz.x), xz.x - bankX(xz.y)); }
 // Ground height past the waterline (slopes into the sea), 0 inland.
-float seabedY(vec2 xz){ float below = shoreZ(xz.x) - xz.y; return below > 0.0 ? -min(0.45, below * 0.22) : 0.0; }
+float seabedY(vec2 xz){ float below = -landDist(xz); return below > 0.0 ? -min(0.45, below * 0.22) : 0.0; }
 `
 
 // Soft piano shadow (PCF) and a contact darkening under the case.

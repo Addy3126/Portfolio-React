@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { fogGLSL, noiseGLSL, shadowGLSL } from './glsl'
-import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, palette, shared, shoreZ } from './world'
+import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, landDist, palette, shared } from './world'
 
 // A tiled grass field in the spirit of Ghost of Tsushima's grass, adapted to WebGL2:
 // - 2.5 m tiles, each frustum-culled on its own
@@ -15,7 +15,8 @@ import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, palette, shared, shore
 
 const TILE = 2.5
 const CLUMP_CELL = 0.9
-const FIELD = { x0: -24, x1: 24, z0: -10.5, z1: 11.8 }
+// Blade tiles cover the main field; the far spit is painted as carpet by the ground.
+const FIELD = { x0: -24, x1: 46, z0: -66, z1: 11.8 }
 
 // Deterministic hash and value noise for placement-time variation.
 const hash = (i, j, k) => {
@@ -66,7 +67,7 @@ function nearestClump(x, z) {
 
 // Where grass may grow.
 const inField = (x, z) =>
-  z <= FIELD.z1 && z >= shoreZ(x) + BEACH_WIDTH && Math.abs(x) <= (11.5 - z) * 1.05 + 3 &&
+  z <= FIELD.z1 && z >= FIELD.z0 && landDist(x, z) >= BEACH_WIDTH && (z < -16 || Math.abs(x) <= (11.5 - z) * 1.05 + 3) &&
   Math.hypot(x, z - 9) >= 1.4 && Math.hypot(x + 1.5, z - 10.8) >= 1.4
 
 // Blade template: `parts` strips of `segments` segments. position = (side -0.5..0.5, t 0..1, part).
@@ -281,7 +282,7 @@ function makeMaterial(hi) {
 }
 
 // Denser close to the cameras and piano, sparser toward the shore.
-const densityAt = (z, base) => base * (1 + 2.2 * THREE.MathUtils.smoothstep(z, -2, 6))
+const densityAt = (z, base) => base * (z < -16 ? 0.35 : 1 + 2.2 * THREE.MathUtils.smoothstep(z, -2, 6))
 
 function buildTile(tx, tz, base, rand) {
   const x0 = tx * TILE
