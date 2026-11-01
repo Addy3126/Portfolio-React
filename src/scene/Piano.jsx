@@ -29,7 +29,7 @@ const KEY_Z0 = -0.61
 const FINISHES = {
   white: { color: '#f1eef6', roughness: 0.12 },
   black: { color: '#0b0a10', roughness: 0.07 },
-  pearl: { color: '#ebe8f8', roughness: 0.1, iridescence: 0.4, iridescenceIOR: 1.3 },
+  pearl: { color: '#ebe8f8', roughness: 0.1 },
 }
 
 export function pianoMaterials(d) {
@@ -225,13 +225,20 @@ function buildPiano(d, mats) {
   }
   parts.push(lid)
 
-  // Prop stick resting on the bentside rim.
+  // Prop stick: socket on the bentside rim, leaning inward to a cup under the lid.
+  // The lid point it meets is measured along the tilted lid, so it always lands on the lid.
   const xp = 0.52 * L
-  const sRim = bentsideAt(pts, xp) - 0.05
-  const r = sRim / Math.cos(LID_ANGLE)
-  const propH = r * Math.sin(LID_ANGLE)
-  add(new THREE.CylinderGeometry(0.011, 0.013, propH, 10), mats.lacquer, [xp, RIM_TOP + propH / 2, sRim - HALF])
-  add(new THREE.CylinderGeometry(0.022, 0.022, 0.012, 14), mats.brass, [xp, RIM_TOP + 0.006, sRim - HALF])
+  const edge = bentsideAt(pts, xp)
+  const sBase = edge - 0.035
+  const rLid = edge - 0.09 // distance from the hinge along the lid, safely inside its edge
+  const base = new THREE.Vector3(xp, RIM_TOP, sBase - HALF)
+  const top = new THREE.Vector3(xp, RIM_TOP + 0.01 + rLid * Math.sin(LID_ANGLE), rLid * Math.cos(LID_ANGLE) - HALF)
+  const len = base.distanceTo(top)
+  const stick = add(new THREE.CylinderGeometry(0.011, 0.013, len, 10), mats.lacquer)
+  stick.position.copy(base).lerp(top, 0.5)
+  stick.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), top.clone().sub(base).normalize())
+  add(new THREE.CylinderGeometry(0.022, 0.022, 0.012, 14), mats.brass, [xp, RIM_TOP + 0.006, sBase - HALF])
+  add(new THREE.CylinderGeometry(0.02, 0.014, 0.018, 14), mats.brass, [top.x, top.y - 0.012, top.z])
 
   // --- Legs with casters or ferrules.
   const legSpots = [
