@@ -56,6 +56,8 @@ export const shared = {
   // Cursor position on the field (x/z) and how strongly grass parts around it.
   uCursor: { value: new THREE.Vector2(999, 999) },
   uCursorStrength: { value: 0 },
+  // Distance from the camera where grass blades stop; the ground paints a carpet beyond.
+  uGrassFar: { value: 999 },
 }
 
 export const color = c

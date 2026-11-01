@@ -15,7 +15,8 @@ void main(){
 const fragment = /* glsl */ `
 uniform float uTime;
 uniform float uMotion;
-uniform vec3 cNear, cFar, cFrost, cSand, cWet;
+uniform vec3 cNear, cFar, cFrost, cSand, cWet, cCarpet;
+uniform float uGrassFar;
 uniform vec3 uPianoPos, uPianoGlow;
 uniform float uGlowPulse;
 varying vec3 vWorld;
@@ -45,6 +46,11 @@ void main(){
   col = mix(col, sand, beach);
   // Darken as the seabed drops away.
   col = mix(col, cWet * 0.5, 1.0 - smoothstep(-0.2, -0.02, vWorld.y));
+
+  // Grass carpet where blades are no longer drawn (far LOD).
+  float far = smoothstep(uGrassFar - 4.0, uGrassFar, length(vWorld.xz - cameraPosition.xz));
+  vec3 carpet = cCarpet * (0.8 + 0.35 * vnoise(vWorld.xz * 0.6)) * (0.85 + 0.3 * vnoise(vWorld.xz * 0.09 + 3.0));
+  col = mix(col, carpet, far * (1.0 - beach) * step(0.0, inland));
 
   float back = pow(max(dot(V, uSunDir), 0.0), 5.0);
   col += cFrost * back * 0.25 * (1.0 - beach);
@@ -88,6 +94,7 @@ export default function Ground() {
           cFrost: { value: color(palette.frost) },
           cSand: { value: color('#a49ad0') },
           cWet: { value: color('#3c3f8c') },
+          cCarpet: { value: color('#8a82cf') },
         },
       }),
     [],

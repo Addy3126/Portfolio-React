@@ -54,8 +54,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       <Sky />
       <Sea reflection={debug.reflection ? q.reflection : 0} />
       <Ground />
-      {grassEnabled && <Grass count={q.grassNear} layer="near" />}
-      {grassEnabled && <Grass count={q.grassFar} layer="far" />}
+      {grassEnabled && <Grass density={q.grassDensity} hiDist={q.grassHi} loDist={q.grassLo} />}
       {grassEnabled && <FieldFlowers />}
       {debug.flowers && <Petals count={q.petals} />}
       <Ruins hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />

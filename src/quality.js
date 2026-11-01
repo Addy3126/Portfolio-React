@@ -1,8 +1,8 @@
 // Picks a rendering tier once at startup. Override with ?quality=low|mid|high.
 const TIERS = {
-  high: { grassNear: 95000, grassFar: 45000, effects: 'full', petals: 1500, dpr: [1, 1.25], reflection: 0.5 },
-  mid: { grassNear: 48000, grassFar: 22000, effects: 'full', petals: 800, dpr: [1, 1.25], reflection: 0.35 },
-  low: { grassNear: 20000, grassFar: 9000, effects: 'basic', petals: 320, dpr: [1, 1], reflection: 0 },
+  high: { grassDensity: 140, grassHi: 10, grassLo: 28, effects: 'full', petals: 1500, dpr: [1, 1.25], reflection: 0.5 },
+  mid: { grassDensity: 80, grassHi: 8, grassLo: 24, effects: 'full', petals: 800, dpr: [1, 1.25], reflection: 0.35 },
+  low: { grassDensity: 40, grassHi: 0, grassLo: 20, effects: 'basic', petals: 320, dpr: [1, 1], reflection: 0 },
 }
 
 // Frames per second the scene renders at (the page itself still scrolls at full rate).
@@ -17,12 +17,14 @@ export function settingsFor(level) {
   q.dof = q.effects === 'full' && level < 2
   if (level >= 1) {
     q.dpr = [1, 1]
+    q.grassHi *= 0.7
+    q.grassDensity = Math.round(q.grassDensity * 0.85)
     q.reflection *= 0.6
   }
   if (level >= 2) {
     q.reflection = 0
-    q.grassNear = Math.round(q.grassNear * 0.6)
-    q.grassFar = Math.round(q.grassFar * 0.6)
+    q.grassHi = 0 // simple blades only
+    q.grassDensity = Math.round(q.grassDensity * 0.6)
     q.petals = Math.round(q.petals * 0.6)
   }
   return q
@@ -58,7 +60,6 @@ export const debug = {
 export const grassEnabled = new URLSearchParams(window.location.search).get('grass') !== '0'
 // Debug: ?autoquality=0 keeps the starting tier even if frames run long.
 export const autoQualityEnabled = new URLSearchParams(window.location.search).get('autoquality') !== '0'
-export const bloomEnabled = new URLSearchParams(window.location.search).get('bloom') !== '0'
 export const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 export function hasWebGL() {
