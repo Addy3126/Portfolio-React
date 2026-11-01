@@ -104,6 +104,8 @@ void main(){
     vec3 refl = mix(cSkyRefl, cGlow, spow(dot(R0, uSunDir), 10.0));
   #endif
 
+  // Never draw water over land (the ground undulates around the sea level).
+  if (landDist(p) > 0.15) discard;
   // Water depth above the seabed at this point.
   float depth = vWorld.y - seabedY(p);
 

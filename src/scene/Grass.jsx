@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { fogGLSL, noiseGLSL, shadowGLSL } from './glsl'
-import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, landDist, palette, shared } from './world'
+import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, landDist, mainDist, palette, shared } from './world'
 
 // A tiled grass field in the spirit of Ghost of Tsushima's grass, adapted to WebGL2:
 // - 2.5 m tiles, each frustum-culled on its own
@@ -68,7 +68,7 @@ function nearestClump(x, z) {
 // Where grass may grow.
 const inField = (x, z) =>
   z <= FIELD.z1 && z >= FIELD.z0 && landDist(x, z) >= BEACH_WIDTH && (z < -16 || Math.abs(x) <= (11.5 - z) * 1.05 + 3) &&
-  Math.hypot(x, z - 9) >= 1.4 && Math.hypot(x + 1.5, z - 10.8) >= 1.4
+  Math.hypot(x, z - 9) >= 1.4 && Math.hypot(x + 1.5, z - 10.8) >= 1.4 && Math.hypot(x - 31, z + 38) >= 3.5 // clear of the Contact camera
 
 // Blade template: `parts` strips of `segments` segments. position = (side -0.5..0.5, t 0..1, part).
 function bladeTemplate(segments, parts) {
@@ -282,7 +282,7 @@ function makeMaterial(hi) {
 }
 
 // Denser close to the cameras and piano, sparser toward the shore.
-const densityAt = (z, base) => base * (z < -16 ? 0.35 : 1 + 2.2 * THREE.MathUtils.smoothstep(z, -2, 6))
+const densityAt = (z, base) => base * (z < -12 ? 0.6 : 1 + 2.2 * THREE.MathUtils.smoothstep(z, -2, 6))
 
 function buildTile(tx, tz, base, rand) {
   const x0 = tx * TILE
@@ -297,6 +297,8 @@ function buildTile(tx, tz, base, rand) {
     const x = x0 + rand() * TILE
     const z = z0 + rand() * TILE
     if (!inField(x, z)) continue
+    const onSpit = mainDist(x, z) < 0
+    if (onSpit && rand() > 0.07) continue // the spit: only scattered tufts among sand and rock
     const clump = nearestClump(x, z)
     const rel = Math.min(1, clump.d / (CLUMP_CELL * 0.75))
     if (rand() < rel * rel * 0.65) continue // gaps between clumps
@@ -366,7 +368,7 @@ export default function Grass({ density = 140, hiDist = 10, loDist = 28 }) {
           m.visible = false
           return m
         }
-        list.push({ center: tile.center, hi: make(templates.hi, materials.hi), lo: make(templates.lo, materials.lo) })
+        list.push({ center: tile.center, spit: tile.center.z < -12, hi: make(templates.hi, materials.hi), lo: make(templates.lo, materials.lo) })
       }
     return list
   }, [density, templates, materials])
@@ -389,7 +391,8 @@ export default function Grass({ density = 140, hiDist = 10, loDist = 28 }) {
     for (const t of tiles) {
       const d = Math.hypot(t.center.x - camera.position.x, t.center.z - camera.position.z)
       t.hi.visible = d < hiDist
-      t.lo.visible = d >= hiDist && d < loDist
+      // Sparse spit tiles are cheap: keep them on so nothing pops in as the camera flies out.
+      t.lo.visible = d >= hiDist && (d < loDist || t.spit)
     }
   })
 

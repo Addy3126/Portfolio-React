@@ -6,7 +6,7 @@ import { reducedMotion } from '../quality'
 import { SUN_DIR } from './world'
 
 const v = (x, y, z) => new THREE.Vector3(x, y, z)
-const contactPos = v(24, 0.9, -57) // just past the tip of the grassy spit
+const contactPos = v(31, 1.3, -38) // out on the spit, its rocky end in the middle distance
 
 // Camera stops, one per section. `portrait` overrides apply on tall screens.
 export const SHOTS = [

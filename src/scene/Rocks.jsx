@@ -4,7 +4,7 @@ import { TOWERS } from './ruins/layout'
 import { seeded } from './ruins/noise3'
 import { rockGeometry, rockMaterial } from './ruins/rocks'
 import { plateauTopAt } from './Plateau'
-import { bankX, shoreZ } from './world'
+import { bankX, shoreZ, spitHalfWidth, spitPoint } from './world'
 
 // The headland: two large rock masses (shared with Ruins, which builds on top of them).
 export const HEADLAND = [
@@ -72,9 +72,28 @@ function placements() {
     }
   }
 
-  // Rocks along the beach, the spit and the channel bank.
+  // Rocks along the spit's edges, and a rocky end.
+  // Pebbles and small stones scattered over the spit, a little denser toward its end.
+  for (let i = 0; i < 160; i++) {
+    const t = Math.pow(rand(), 0.7)
+    const [cx, cz] = spitPoint(t)
+    const side = rand() < 0.5 ? -1 : 1
+    const off = spitHalfWidth(t) * rand() * 1.05
+    const s = 0.04 + rand() * rand() * (0.14 + t * 0.12)
+    list.push([cx + side * off * 0.9, -0.1, cz + side * off * 0.3, s * 1.4, s * (0.6 + rand() * 0.6), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
+  }
+  {
+    const [ex, ez] = spitPoint(1)
+    for (let i = 0; i < 30; i++) {
+      const a = rand() * Math.PI * 2
+      const r = rand() * 4
+      const s = 0.06 + rand() * rand() * 0.4
+      list.push([ex + Math.cos(a) * r, -0.02, ez + Math.sin(a) * r, s * 1.3, s * (0.7 + rand() * 0.7), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
+    }
+  }
+  // Rocks along the main beach and the channel bank.
   for (let i = 0; i < 26; i++) {
-    const x = -20 + rand() * 66
+    const x = -20 + rand() * 32
     const z = shoreZ(x) - 0.6 + rand() * 1.4
     const s = 0.12 + rand() * rand() * 0.55
     list.push([x, -0.05, z, s * 1.4, s * (0.7 + rand() * 0.6), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
