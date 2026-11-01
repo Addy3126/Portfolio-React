@@ -1,16 +1,16 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Bloom, DepthOfField, EffectComposer, GodRays, Noise, SMAA, ToneMapping, Vignette, wrapEffect } from '@react-three/postprocessing'
+import { DepthOfField, EffectComposer, GodRays, Noise, SMAA, ToneMapping, Vignette, wrapEffect } from '@react-three/postprocessing'
 import { BlendFunction, Effect, KernelSize, ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
-import { bloomEnabled, reducedMotion } from '../quality'
+import { reducedMotion } from '../quality'
 import { motion } from '../store'
 import { PIANO_CENTRE, SUN_DIR } from './world'
 
 const SUN_DISTANCE = 1400
 
-// Safety net: replaces any invalid (NaN/infinite) pixel before blur and bloom, which
-// would otherwise smear one bad pixel into large black blocks. The empty mainUv keeps
+// Safety net: replaces any invalid (NaN/infinite) pixel before the blur passes, which
+// would otherwise smear one bad pixel into black blocks. The empty mainUv keeps
 // this in its own pass, so the passes after it read the cleaned image.
 class SanitizeEffect extends Effect {
   constructor() {
@@ -71,9 +71,8 @@ export default function Effects({ godRays = true, dof = true, sanitize = true, m
     }
   })
 
-  // Depth of field needs hardware multisampling: without it the blur produces invalid
-  // pixels that bloom spreads across the frame (black screen). 2x is half the old cost.
-  // When depth of field is off, use cheaper SMAA instead.
+  // Edge smoothing: 2x hardware multisampling while depth of field is available (the DoF
+  // pass can emit stray invalid pixels without it); otherwise cheaper SMAA. ?msaa=N overrides.
   const msaa = msaaOverride ?? (dof ? 2 : 0)
   return (
     <EffectComposer ref={composer} multisampling={msaa} frameBufferType={THREE.HalfFloatType} autoClear={false}>
@@ -93,9 +92,6 @@ export default function Effects({ godRays = true, dof = true, sanitize = true, m
           resolutionScale={0.5}
         />
       )}
-      {/* Second safety net: catches anything the depth-of-field or light-shaft passes produce. */}
-      {sanitize && bloomEnabled && <Sanitize />}
-      {bloomEnabled && <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.82} luminanceSmoothing={0.25} />}
       <ToneMapping mode={ToneMappingMode.NEUTRAL} />
       {msaa === 0 && <SMAA />}
       <Vignette offset={0.3} darkness={0.55} />
