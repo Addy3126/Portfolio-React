@@ -33,13 +33,13 @@ export const HEADLAND_BUILDINGS = [
 
 // Ruins along the terraces of the rock plateau on the left (base height from the rock).
 export const PLATEAU_BUILDINGS = [
-  { x: -47, z: -62, w: 6, d: 6, h: 12, broken: true, style: 'stone' },
-  { x: -60, z: -100, w: 8, d: 7, h: 18, style: 'brick' },
-  { x: -55, z: -138, w: 5, d: 5, h: 10, broken: true, style: 'concrete' },
-  { x: -95, z: -78, w: 9, d: 8, h: 22, broken: true, style: 'concrete' },
-  { x: -82, z: -185, w: 7, d: 7, h: 16, style: 'stone' },
-  { x: -150, z: -110, w: 8, d: 8, h: 20, broken: true, style: 'brick' },
-  { x: -230, z: -205, w: 10, d: 9, h: 26, broken: true, style: 'concrete' },
+  { x: -58.0, z: -263.9, w: 5, d: 5, h: 8, broken: true, style: 'stone' },
+  { x: -96.1, z: -255.1, w: 6, d: 6, h: 12, style: 'brick' },
+  { x: -128.5, z: -243.2, w: 4, d: 4, h: 7, broken: true, style: 'concrete' },
+  { x: -164.0, z: -225.3, w: 7, d: 6, h: 14, broken: true, style: 'concrete' },
+  { x: -195.9, z: -193.9, w: 5, d: 5, h: 10, style: 'stone' },
+  { x: -228.5, z: -169.5, w: 6, d: 6, h: 13, broken: true, style: 'brick' },
+  { x: -263.7, z: -125.4, w: 8, d: 7, h: 16, broken: true, style: 'concrete' },
 ]
 
 // Fallen slabs lying in the water: [x, z, width, height, depth, rotY, rotZ]

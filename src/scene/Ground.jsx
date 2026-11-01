@@ -15,7 +15,7 @@ void main(){
 const fragment = /* glsl */ `
 uniform float uTime;
 uniform float uMotion;
-uniform vec3 cNear, cFar, cFrost, cSand, cWet, cCarpet;
+uniform vec3 cNear, cFar, cFrost, cSand, cWet, cCarpet, cRockG;
 uniform float uGrassFar;
 uniform vec3 uPianoPos, uPianoGlow;
 uniform float uGlowPulse;
@@ -35,7 +35,10 @@ void main(){
 
   // Beach: a strip of sand between the grass and the water.
   float inland = landDist(vWorld.xz); // metres from the waterline (negative = under water)
-  float beach = 1.0 - smoothstep(0.55, 0.95, inland);
+  float beach = 1.0 - smoothstep(2.4, 3.3, inland);
+  // The spit (land beyond the main field) is sand and rock, not grass.
+  float spit = 1.0 - smoothstep(-3.0, 0.5, mainDist(vWorld.xz));
+  beach = max(beach, spit);
   vec3 sand = cSand * (0.85 + 0.3 * vnoise(vWorld.xz * 3.0));
   // Wet sand where the wash recently reached; the reach moves with the swell.
   float reach = 0.16 + 0.1 * sin(t * 0.55 + vWorld.x * 0.21) + 0.05 * sin(t * 1.3 - vWorld.x * 0.6);
@@ -43,6 +46,10 @@ void main(){
   vec3 R = reflect(V, vec3(0.0, 1.0, 0.0));
   vec3 wetCol = cWet + uFogGlow * pow(max(dot(R, uSunDir), 0.0), 30.0) * 0.6; // wet sand mirrors the glow
   sand = mix(sand, wetCol, wet);
+  // Rocky patches on the spit, more toward its end.
+  // Pebbly sand on the spit: small dark grains, a bit denser toward its end.
+  float grains = smoothstep(0.78, 0.9, vnoise(vWorld.xz * 9.0)) * (0.5 + 0.5 * vnoise(vWorld.xz * 0.5)) * (1.0 + max(0.0, -vWorld.z - 30.0) * 0.02);
+  sand = mix(sand, cRockG * (0.8 + 0.4 * vnoise(vWorld.xz * 23.0)), clamp(spit * grains, 0.0, 0.7));
   col = mix(col, sand, beach);
   // Darken as the seabed drops away.
   col = mix(col, cWet * 0.5, 1.0 - smoothstep(-0.2, -0.02, vWorld.y));
@@ -96,6 +103,7 @@ export default function Ground() {
           cSand: { value: color('#a49ad0') },
           cWet: { value: color('#3c3f8c') },
           cCarpet: { value: color('#8a82cf') },
+          cRockG: { value: color('#3a3558') },
         },
       }),
     [],

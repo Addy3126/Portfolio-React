@@ -9,14 +9,36 @@ export const PIANO_POS = new THREE.Vector3(-2.55, 0, 3.7)
 
 // Coastline. Keep in sync with shoreGLSL in glsl.js.
 // Front shore: a wavy line, plus a grassy spit reaching out toward the ruins on the right.
-export const shoreZ = (x) =>
-  -8 + Math.sin(x * 0.15) * 1.2 + Math.sin(x * 0.37 + 1.3) * 0.5 - 46 * Math.exp(-0.5 * ((x - 24) / 13) ** 2)
+export const shoreZ = (x) => -8 + Math.sin(x * 0.15) * 1.2 + Math.sin(x * 0.37 + 1.3) * 0.5
 // Left bank: a water channel separates the field from the rock plateau.
 export const bankX = (z) => -22 - 1.5 * Math.sin(z * 0.13) - 0.8 * Math.sin(z * 0.41 + 2.0)
+// Main field only (positive = on land).
+export const rightX = (z) => 58 + 3 * Math.sin(z * 0.17) + 1.5 * Math.sin(z * 0.5 + 1)
+export const mainDist = (x, z) => Math.min(z - shoreZ(x), x - bankX(z), rightX(z) - x)
+
+// The spit: a sandy, rocky strip that leaves the field, wanders out and curves right.
+export const spitPoint = (t) => [16 + 6 * Math.sin(t * 3.0) + 22 * t * t, -5 - 48 * t]
+export const spitHalfWidth = (t) => 2.2 + 8.5 * Math.pow(1 - t, 0.8) + 0.9 * Math.sin(t * 13.0)
+const SPIT_N = 24
+export function spitDist(x, z) {
+  let best = -1e9
+  let prev = spitPoint(0)
+  for (let i = 1; i <= SPIT_N; i++) {
+    const t1 = i / SPIT_N
+    const cur = spitPoint(t1)
+    const ex = cur[0] - prev[0]
+    const ez = cur[1] - prev[1]
+    const h = Math.min(1, Math.max(0, ((x - prev[0]) * ex + (z - prev[1]) * ez) / (ex * ex + ez * ez)))
+    const d = Math.hypot(x - prev[0] - ex * h, z - prev[1] - ez * h)
+    best = Math.max(best, spitHalfWidth((i - 1 + h) / SPIT_N) - d)
+    prev = cur
+  }
+  return best
+}
 // Metres from the nearest waterline (negative = under water).
-export const landDist = (x, z) => Math.min(z - shoreZ(x), x - bankX(z))
+export const landDist = (x, z) => Math.max(mainDist(x, z), spitDist(x, z))
 // Grass stops this far inland from the waterline, leaving a strip of beach.
-export const BEACH_WIDTH = 0.8
+export const BEACH_WIDTH = 3.2
 // Centre of the piano case in world x/z.
 export const PIANO_CENTRE = new THREE.Vector3(PIANO_POS.x + 1.1, 0.8, PIANO_POS.z)
 // Light direction used for the piano's shadow: the sun's bearing, raised so the shadow stays compact.

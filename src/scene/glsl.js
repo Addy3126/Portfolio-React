@@ -31,13 +31,31 @@ vec3 applyFog(vec3 col, float dist, vec3 V){
 
 // Analytic shoreline (matches shoreZ in world.js) and the beach/seabed height there.
 export const shoreGLSL = /* glsl */ `
-float shoreZ(float x){
-  float d = (x - 24.0) / 13.0;
-  return -8.0 + sin(x * 0.15) * 1.2 + sin(x * 0.37 + 1.3) * 0.5 - 46.0 * exp(-0.5 * d * d);
-}
+float shoreZ(float x){ return -8.0 + sin(x * 0.15) * 1.2 + sin(x * 0.37 + 1.3) * 0.5; }
 float bankX(float z){ return -22.0 - 1.5 * sin(z * 0.13) - 0.8 * sin(z * 0.41 + 2.0); }
+float rightX(float z){ return 58.0 + 3.0 * sin(z * 0.17) + 1.5 * sin(z * 0.5 + 1.0); }
+float mainDist(vec2 xz){ return min(min(xz.y - shoreZ(xz.x), xz.x - bankX(xz.y)), rightX(xz.y) - xz.x); }
+// Spit (keep in sync with world.js).
+vec2 spitPoint(float t){ return vec2(16.0 + 6.0 * sin(t * 3.0) + 22.0 * t * t, -5.0 - 48.0 * t); }
+float spitHalfWidth(float t){ return 2.2 + 8.5 * pow(1.0 - t, 0.8) + 0.9 * sin(t * 13.0); }
+float spitDist(vec2 xz){
+  // Cheap reject far from the spit.
+  if (xz.y > 8.0 || xz.y < -66.0 || xz.x < 0.0 || xz.x > 56.0) return -1e3;
+  float best = -1e9;
+  vec2 prev = spitPoint(0.0);
+  for (int i = 1; i <= 24; i++) {
+    float t1 = float(i) / 24.0;
+    vec2 cur = spitPoint(t1);
+    vec2 e = cur - prev;
+    float h = clamp(dot(xz - prev, e) / dot(e, e), 0.0, 1.0);
+    float d = length(xz - prev - e * h);
+    best = max(best, spitHalfWidth((float(i - 1) + h) / 24.0) - d);
+    prev = cur;
+  }
+  return best;
+}
 // Metres from the nearest waterline (negative = under water).
-float landDist(vec2 xz){ return min(xz.y - shoreZ(xz.x), xz.x - bankX(xz.y)); }
+float landDist(vec2 xz){ return max(mainDist(xz), spitDist(xz)); }
 // Ground height past the waterline (slopes into the sea), 0 inland.
 float seabedY(vec2 xz){ float below = -landDist(xz); return below > 0.0 ? -min(0.45, below * 0.22) : 0.0; }
 `
