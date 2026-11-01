@@ -10,8 +10,11 @@ Built with Vite, React 19, React Three Fiber, postprocessing and Lenis. Everythi
 npm install
 npm run dev      # local dev server
 npm run build    # production build to dist/
-npm run deploy   # build and publish dist/ to GitHub Pages
 ```
+
+## Deployment
+
+Every push to `main` builds the site and publishes it to GitHub Pages (`.github/workflows/deploy.yml`). In the repository's Settings → Pages, **Source** must be set to **GitHub Actions**. You can also rerun a deploy by hand from the Actions tab.
 
 ## Editing content
 
