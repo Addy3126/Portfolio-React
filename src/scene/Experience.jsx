@@ -15,6 +15,7 @@ import Piano from './Piano'
 import BeachShadow from './BeachShadow'
 import PianoShadow from './PianoShadow'
 import Ruins from './Ruins'
+import ShorePlants from './ShorePlants'
 import Rocks from './Rocks'
 import Plateau from './Plateau'
 import Sea from './Sea'
@@ -79,6 +80,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       <Ground />
       {grassEnabled && <Grass density={q.grassDensity} hiDist={q.grassHi} loDist={q.grassLo} />}
       {grassEnabled && <FieldFlowers />}
+      {grassEnabled && <ShorePlants />}
       {debug.flowers && <Petals count={q.petals} />}
       <Rocks />
       <Plateau />

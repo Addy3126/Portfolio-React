@@ -6,6 +6,7 @@ import { autoQualityEnabled, debug, grassEnabled, settingsFor, tier as startTier
 import CameraRig from '../scene/CameraRig'
 import CursorField from '../scene/CursorField'
 import Piano from '../scene/Piano'
+import ShorePlants from '../scene/ShorePlants'
 import Life from '../scene/Life'
 import { Adaptive, FrameLimiter } from '../scene/Perf'
 import { SUN_DIR, shared } from '../scene/world'
@@ -139,6 +140,7 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       <GroundGPU />
       {grassEnabled && <GrassGPU density={q.grassDensity} hiDist={q.grassHi} loDist={q.grassLo} />}
       {grassEnabled && <FieldFlowersGPU />}
+      {grassEnabled && <ShorePlants />}
       {debug.flowers && <PetalsGPU count={q.petals} />}
       <RocksGPU />
       <PlateauGPU />
