@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
+import { texturesReady } from '../textureReady'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { autoQualityEnabled, debug, grassEnabled, settingsFor, tier as startTier } from '../quality'
 import CameraRig from './CameraRig'
@@ -38,7 +39,7 @@ function Clock({ onReady }) {
     const t = clock.elapsedTime
     shared.uTime.value = t
     shared.uGlowPulse.value = 1 + 0.3 * Math.sin((t * Math.PI * 2) / 8)
-    if (++frames.current === 3) onReady()
+    if (++frames.current === 3) texturesReady().then(onReady)
   })
   return null
 }

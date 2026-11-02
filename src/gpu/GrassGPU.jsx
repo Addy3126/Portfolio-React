@@ -25,7 +25,7 @@ import {
   vec2,
   vec3,
 } from 'three/tsl'
-import { FIELD, TILE, bladeTemplate, buildTile, seeded } from '../scene/Grass'
+import { FIELD, FOLD_BELOW, TILE, bladeTemplate, buildTile, seeded } from '../scene/Grass'
 import { color, palette, shared } from '../scene/world'
 import { REFLECTION_HIDDEN } from './SeaGPU'
 import { pianoShadow } from './shadow'
@@ -68,7 +68,7 @@ function makeMaterial(hi) {
   let t = aT
   if (hi) {
     // Short blades fold into two blades from the same root; tall ones use both strips in a row.
-    const fold = kind.lessThan(0.5).and(iParams.y.lessThan(0.33))
+    const fold = kind.lessThan(0.5).and(iParams.y.lessThan(Number(FOLD_BELOW)))
     const second = fold.and(part.greaterThan(0.5))
     yaw = second.select(iParams.x.add(2.4).add(rnd.mul(1.2)), iParams.x)
     base = iOffset.add(vec3(cos(yaw), 0, sin(yaw)).mul(second.select(0.035, 0.0)))
@@ -219,6 +219,7 @@ export default function GrassGPU({ density = 140, hiDist = 10, loDist = 28 }) {
           m.layers.set(REFLECTION_HIDDEN)
           return m
         }
+        window.__grassBlades = (window.__grassBlades || 0) + tile.count
         list.push({ center: tile.center, spit: tile.center.z < -12, hi: make(templates.hi, materials.hi), lo: make(templates.lo, materials.lo) })
       }
     return list

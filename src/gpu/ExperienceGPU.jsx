@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { texturesReady } from '../textureReady'
 import { Canvas, extend, useFrame } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
 import { autoQualityEnabled, debug, grassEnabled, settingsFor, tier as startTier } from '../quality'
@@ -30,7 +31,7 @@ function Clock({ onReady }) {
     shared.uTime.value = t
     shared.uGlowPulse.value = 1 + 0.3 * Math.sin((t * Math.PI * 2) / 8)
     sync()
-    if (++frames.current === 3) onReady()
+    if (++frames.current === 3) texturesReady().then(onReady)
   })
   return null
 }

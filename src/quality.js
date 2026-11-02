@@ -3,11 +3,11 @@
 // render resolution first, then the tier, down when frames run late and back up when there
 // is steady headroom. ?quality=minimal|low|mid|high|ultra pins the starting tier.
 const TIERS = {
-  minimal: { grassDensity: 22, grassHi: 0, grassLo: 14, effects: 'basic', petals: 140, dpr: [0.75, 0.75], reflection: 0 },
-  low: { grassDensity: 40, grassHi: 0, grassLo: 20, effects: 'basic', petals: 320, dpr: [1, 1], reflection: 0 },
-  mid: { grassDensity: 80, grassHi: 8, grassLo: 24, effects: 'full', petals: 800, dpr: [1, 1.25], reflection: 0.35 },
-  high: { grassDensity: 140, grassHi: 10, grassLo: 28, effects: 'full', petals: 1500, dpr: [1, 1.25], reflection: 0.5 },
-  ultra: { grassDensity: 190, grassHi: 13, grassLo: 34, effects: 'full', petals: 2000, dpr: [1, 1.5], reflection: 0.6 },
+  minimal: { grassDensity: 44, grassHi: 0, grassLo: 14, effects: 'basic', petals: 140, dpr: [0.75, 0.75], reflection: 0 },
+  low: { grassDensity: 80, grassHi: 0, grassLo: 20, effects: 'basic', petals: 320, dpr: [1, 1], reflection: 0 },
+  mid: { grassDensity: 160, grassHi: 8, grassLo: 24, effects: 'full', petals: 800, dpr: [1, 1.25], reflection: 0.35 },
+  high: { grassDensity: 280, grassHi: 10, grassLo: 28, effects: 'full', petals: 1500, dpr: [1, 1.25], reflection: 0.5 },
+  ultra: { grassDensity: 380, grassHi: 13, grassLo: 34, effects: 'full', petals: 2000, dpr: [1, 1.5], reflection: 0.6 },
 }
 export const TIER_ORDER = ['minimal', 'low', 'mid', 'high', 'ultra']
 
@@ -68,8 +68,10 @@ export const debug = {
   shadow: !off('shadow'),
   envCapture: !off('envcap'),
   ao: !off('ao'),
-  // ?grassscale=0.65 scales grass blade height (for trying out field proportions).
+  // ?grassscale= / ?grasswidth= multiply grass blade height / width on top of the defaults
+  // in scene/Grass.jsx (for trying out field proportions).
   grassScale: Math.min(2, Math.max(0.2, Number(params.get('grassscale')) || 1)),
+  grassWidth: Math.min(2, Math.max(0.2, Number(params.get('grasswidth')) || 1)),
   contact: !off('contact'),
   grade: !off('grade'),
   // ?tm=agx|aces|neutral picks the tone mapper (for comparisons).

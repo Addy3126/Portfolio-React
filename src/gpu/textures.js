@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu'
 import { abs, dot, max, normalize, pow, texture, vec3 } from 'three/tsl'
 import { tier } from '../quality'
+import { track } from '../textureReady'
 
 // Photo-scanned surface sets (CC0, Poly Haven), packed by tools into two textures each:
 //   <name>_s : R = albedo luminance (mean 0.5), G = roughness, B = ambient occlusion
@@ -13,7 +14,9 @@ const loader = new THREE.TextureLoader()
 const cache = new Map()
 
 function load(file) {
-  const t = loader.load(`./textures/${file}`)
+  let done
+  track(new Promise((r) => (done = r)))
+  const t = loader.load(`./textures/${file}`, done, undefined, done)
   t.wrapS = t.wrapT = THREE.RepeatWrapping
   t.colorSpace = THREE.NoColorSpace
   t.anisotropy = 8
