@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
 import {
@@ -25,10 +25,12 @@ import {
   sin,
   smoothstep,
   step,
+  uniform,
   vec3,
   vec4,
 } from 'three/tsl'
 import { tier } from '../quality'
+import { DRIFT, useCloudDrift } from '../scene/cloudDrift'
 import { color, palette } from '../scene/world'
 import { fbm3g, hash12, u, vnoise3 } from './tsl'
 
@@ -52,7 +54,8 @@ function densityFn(detail) {
   return Fn(([p, cov]) => {
     const h = p.y.sub(SLAB0).div(SLAB1 - SLAB0)
     const profile = smoothstep(0.0, 0.12, h).mul(float(1.0).sub(smoothstep(0.45, 1.0, h)))
-    const q = vec3(p.x, p.y.mul(2.2), p.z)
+    const pp = p.add(cloudShift) // the field drifts downwind (see scene/cloudDrift.js)
+    const q = vec3(pp.x, pp.y.mul(2.2), pp.z)
     const base = fbm3g(q.mul(0.62).add(vec3(3.1, 0.0, 1.7)))
     const d = base.sub(float(1.0).sub(cov)).div(max(cov, 0.05)).mul(1.6).toVar()
     d.assign(d.mul(profile).sub(float(1.0).sub(profile).mul(0.35)))
@@ -128,18 +131,22 @@ const bakeColor = Fn(() => {
   return vec4(col, T)
 })
 
+const cloudShift = uniform(new THREE.Vector3())
 const CUBE_SIZE = tier === 'low' || tier === 'minimal' ? 512 : 1024
 
 export default function SkyGPU() {
   const mesh = useRef()
   const { gl, scene } = useThree()
 
-  const { target, material } = useMemo(() => {
+  const { target, material, texA, texB, blend } = useMemo(() => {
     const target = new THREE.CubeRenderTarget(CUBE_SIZE, { type: THREE.HalfFloatType, generateMipmaps: false })
     const m = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, fog: false })
+    const texA = cubeTexture(target.texture)
+    const texB = cubeTexture(target.texture)
+    const blend = uniform(0)
     m.colorNode = Fn(() => {
       const d = normalize(positionLocal)
-      const sky = cubeTexture(target.texture, d)
+      const sky = mix(texA.sample(d), texB.sample(d), blend)
       const col = sky.rgb.toVar()
       const clear = sky.a
       const h = d.y
@@ -154,28 +161,50 @@ export default function SkyGPU() {
       const disc = smoothstep(0.99955, 0.99975, sd).mul(smoothstep(-0.004, 0.003, h))
       col.addAssign(vec3(7.0, 6.4, 6.2).mul(disc).mul(mix(0.15, 1.0, clear)))
       col.addAssign(vec3(1.6, 1.3, 1.35).mul(pow(sd, 500.0)).mul(mix(0.4, 1.0, clear)))
+      // Salt-spray haze just above the horizon, so sea and sky meet softly.
+      const haze = exp(max(h, 0.0).mul(-38.0)).mul(smoothstep(-0.02, 0.0, h))
+      col.assign(mix(col, mix(u.fogColor, u.fogGlow, pow(sd, 6.0).mul(0.8)).mul(1.06), haze.mul(0.42)))
       return col
     })()
-    return { target, material: m }
+    return { target, material: m, texA, texB, blend }
   }, [])
 
-  // Bake the sky and clouds once; the same cube lights the scene.
-  useEffect(() => {
+  // Bake the sky and clouds once; the same cube lights the scene. The bake scene is kept
+  // for the drifting re-bakes.
+  const bake = useMemo(() => {
     const bakeScene = new THREE.Scene()
     const bakeMat = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, fog: false })
     bakeMat.colorNode = bakeColor()
-    const sphere = new THREE.Mesh(new THREE.SphereGeometry(10, 64, 32), bakeMat)
-    bakeScene.add(sphere)
-    const cam = new THREE.CubeCamera(0.1, 100, target)
-    cam.update(gl, bakeScene)
+    bakeScene.add(new THREE.Mesh(new THREE.SphereGeometry(10, 64, 32), bakeMat))
+    return { bakeScene, cam: new THREE.CubeCamera(0.1, 100, target) }
+  }, [target])
+  const [baked, setBaked] = useState(null)
+  useEffect(() => {
+    cloudShift.value.set(0, 0, 0)
+    bake.cam.update(gl, bake.bakeScene)
     scene.environment = target.texture
     scene.environmentIntensity = 0.9
-    bakeMat.dispose()
-    sphere.geometry.dispose()
+    setBaked(target.texture)
     return () => {
       scene.environment = null
     }
-  }, [gl, scene, target])
+  }, [gl, scene, target, bake])
+
+  const makeTarget = useCallback((size) => new THREE.CubeRenderTarget(size, { type: THREE.HalfFloatType, generateMipmaps: false }), [])
+  useCloudDrift({
+    enabled: DRIFT,
+    renderer: gl,
+    cubeCamera: bake.cam,
+    bakeScene: bake.bakeScene,
+    setShift: (x, y, z) => cloudShift.value.set(x, y, z),
+    makeTarget,
+    first: baked,
+    show: (a, b, t) => {
+      texA.value = a
+      texB.value = b
+      blend.value = t
+    },
+  })
 
   useEffect(() => () => target.dispose(), [target])
   useFrame(({ camera }) => mesh.current.position.copy(camera.position))
