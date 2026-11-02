@@ -68,6 +68,8 @@ export const debug = {
   shadow: !off('shadow'),
   envCapture: !off('envcap'),
   ao: !off('ao'),
+  // ?grassscale=0.65 scales grass blade height (for trying out field proportions).
+  grassScale: Math.min(2, Math.max(0.2, Number(params.get('grassscale')) || 1)),
   contact: !off('contact'),
   grade: !off('grade'),
   // ?tm=agx|aces|neutral picks the tone mapper (for comparisons).
