@@ -3,6 +3,7 @@ import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js'
 import { fogGLSL, noiseGLSL, shoreGLSL, swashGLSL } from './glsl'
+import { surfaceUniforms } from './surfaces'
 import { sunLanesGLSL } from './sunLanes'
 import { color, hideInReflection, palette, shared } from './world'
 
@@ -56,6 +57,8 @@ uniform sampler2D tDiffuse;
 uniform vec3 color;
 uniform float uTime;
 uniform float uMotion;
+uniform sampler2D tSandS, tSandN;
+uniform vec3 cCaustic;
 uniform vec3 cDeep, cShallow, cFar, cGlow, cSkyRefl, cSandUnder, cFoam, cScatter;
 varying vec4 vUv;
 varying vec3 vWorld;
@@ -123,7 +126,18 @@ void main(){
   float offshore = max(-L, 0.0);
   float path = offshore * 0.55 / max(cosT, 0.25);
   vec3 trans = exp(-vec3(0.55, 0.22, 0.1) * path);
-  vec3 sandSeen = cSandUnder * (0.8 + 0.3 * vnoise(p * 3.0 + n.xz * 4.0));
+  // Sun lanes: towers in the sea block the low sunlight on the water behind them.
+  float sunLit = 1.0 - 0.85 * laneShadow(p);
+  // The sea floor seen through the water: the scanned sand, displaced by the surface
+  // normal (refraction, more in deeper water), with caustics (light focused by the
+  // ripples into a moving web) where the water is clear and sunlit.
+  vec2 pr = p + n.xz * (0.15 + min(depth, 0.5) * 0.9);
+  float sandLum = texture2D(tSandS, pr / 1.6).r;
+  vec3 sandSeen = cSandUnder * (0.62 + 0.5 * sandLum) * (0.85 + 0.25 * vnoise(pr * 3.0));
+  vec2 cw = pr * 2.6 + (vec2(vnoise(pr * 0.9 + t * 0.15), vnoise(pr * 0.9 + 4.0 - t * 0.12)) - 0.5) * 2.4;
+  float caus = 1.0 - smoothstep(0.0, 0.07, voronoi2(cw, t * 0.9).y);
+  caus *= 0.35 + 0.65 * (1.0 - smoothstep(0.0, 0.12, voronoi2(cw * 1.7 + 3.0, t * 1.1).y));
+  sandSeen += cCaustic * caus * sunLit * (1.0 - smoothstep(3.0, 16.0, dist)) * 0.4;
   vec3 deepCol = mix(cDeep, cFar, smoothstep(120.0, 600.0, dist));
   vec3 body = sandSeen * trans + deepCol * (1.0 - trans) + cShallow * 0.25 * trans.b * (1.0 - trans.r);
   float clear = trans.g;
@@ -135,7 +149,6 @@ void main(){
   float crest = max(vWorld.y + 0.04, 0.0);
   float towardSun = spow(dot(V, uSunDir), 3.0);
   // Sun lanes: towers in the sea block the low sunlight on the water behind them.
-  float sunLit = 1.0 - 0.85 * laneShadow(p);
   col *= mix(0.9, 1.0, sunLit);
   col += sunLit * cScatter * crest * 9.0 * towardSun * (1.0 - fresnel) * (1.0 - smoothstep(60.0, 300.0, dist));
 
@@ -167,6 +180,8 @@ const SeaShader = {
 
 function linkUniforms(material) {
   Object.assign(material.uniforms, shared, {
+    ...surfaceUniforms('coast_sand_04', 'tSand'),
+    cCaustic: { value: color('#c9c2ff') },
     cDeep: { value: color('#1c2386') },
     cShallow: { value: color('#4a62d4') },
     cFar: { value: color(palette.seaFar) },
