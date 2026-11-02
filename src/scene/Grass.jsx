@@ -14,10 +14,10 @@ import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, landDist, mainDist, pa
 // - blades seen edge-on are turned and widened toward the camera (no thin flicker)
 // - clumping, large colour patches, a few taller seed stalks
 
-const TILE = 2.5
+export const TILE = 2.5
 const CLUMP_CELL = 0.9
 // Blade tiles cover the main field; the far spit is painted as carpet by the ground.
-const FIELD = { x0: -24, x1: 46, z0: -66, z1: 11.8 }
+export const FIELD = { x0: -24, x1: 46, z0: -66, z1: 11.8 }
 
 // Deterministic hash and value noise for placement-time variation.
 const hash = (i, j, k) => {
@@ -72,7 +72,7 @@ const inField = (x, z) =>
   Math.hypot(x, z - 9) >= 1.4 && Math.hypot(x + 1.5, z - 10.8) >= 1.4 && Math.hypot(x - 31, z + 38) >= 3.5 // clear of the Contact camera
 
 // Blade template: `parts` strips of `segments` segments. position = (side -0.5..0.5, t 0..1, part).
-function bladeTemplate(segments, parts) {
+export function bladeTemplate(segments, parts) {
   const pos = []
   const index = []
   for (let p = 0; p < parts; p++) {
@@ -285,7 +285,7 @@ function makeMaterial(hi) {
 // Denser close to the cameras and piano, sparser toward the shore.
 const densityAt = (z, base) => base * (z < -12 ? 0.6 : 1 + 2.2 * THREE.MathUtils.smoothstep(z, -2, 6))
 
-function buildTile(tx, tz, base, rand) {
+export function buildTile(tx, tz, base, rand) {
   const x0 = tx * TILE
   const z0 = tz * TILE
   const tries = Math.round(densityAt(z0 + TILE / 2, base) * TILE * TILE * 1.35)
@@ -363,7 +363,7 @@ function buildTile(tx, tz, base, rand) {
   }
 }
 
-function seeded(seed) {
+export function seeded(seed) {
   let s = seed
   return () => {
     s = (s * 16807) % 2147483647

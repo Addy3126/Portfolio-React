@@ -1,13 +1,15 @@
 import { useRef } from 'react'
 import { Canvas, extend, useFrame } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
-import { debug, settingsFor } from '../quality'
+import { debug, grassEnabled, settingsFor } from '../quality'
 import CameraRig from '../scene/CameraRig'
+import CursorField from '../scene/CursorField'
 import { FrameLimiter } from '../scene/Perf'
 import { SUN_DIR, shared } from '../scene/world'
 import EffectsGPU from './EffectsGPU'
+import GrassGPU from './GrassGPU'
 import GroundGPU from './GroundGPU'
-import SeaGPU from './SeaGPU'
+import SeaGPU, { REFLECTION_HIDDEN } from './SeaGPU'
 import SkyGPU from './SkyGPU'
 import { sync } from './tsl'
 
@@ -45,12 +47,16 @@ export default function ExperienceGPU({ onSelect, onReady }) {
       dpr={q.dpr}
       camera={{ fov: 42, near: 0.1, far: 3000, position: [0, 1, 9] }}
       gl={createRenderer}
-      onCreated={({ gl }) => (gl.toneMapping = THREE.NeutralToneMapping)}
+      onCreated={({ gl, camera }) => {
+        gl.toneMapping = THREE.NeutralToneMapping
+        camera.layers.enable(REFLECTION_HIDDEN) // grass and flowers: seen, but not reflected
+      }}
       onPointerMissed={() => onSelect(null)}
     >
       {debug.fps > 0 && <FrameLimiter fps={debug.fps} />}
       <Clock onReady={onReady} />
       <CameraRig />
+      <CursorField />
 
       <hemisphereLight args={['#8f86c8', '#20255e', 1.2]} />
       <directionalLight position={SUN_DIR.clone().multiplyScalar(100)} color="#f5c8d0" intensity={2.2} />
@@ -59,6 +65,7 @@ export default function ExperienceGPU({ onSelect, onReady }) {
       <SkyGPU />
       <SeaGPU reflection={debug.reflection ? q.reflection : 0} />
       <GroundGPU />
+      {grassEnabled && <GrassGPU density={q.grassDensity} hiDist={q.grassHi} loDist={q.grassLo} />}
 
       <EffectsGPU godRays={q.godRays && debug.godRays} gradeOn={debug.grade} />
     </Canvas>

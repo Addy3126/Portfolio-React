@@ -39,12 +39,15 @@ export const u = {
   pianoGlow: uniform(shared.uPianoGlow.value),
   glowPulse: uniform(1),
   grassFar: uniform(999),
+  cursor: uniform(shared.uCursor.value),
+  cursorStrength: uniform(0),
 }
 export function sync() {
   u.time.value = shared.uTime.value
   u.motion.value = shared.uMotion.value
   u.glowPulse.value = shared.uGlowPulse.value
   u.grassFar.value = shared.uGrassFar.value
+  u.cursorStrength.value = shared.uCursorStrength.value
 }
 
 export const spow = Fn(([x, e]) => pow(max(x, 0.0), e))
@@ -219,4 +222,33 @@ export const foamShadeAt = Fn(([base, V, xz, amt]) => {
   const sd = max(dot(V, u.sunDir), 0.0)
   const shade = base.mul(0.78).add(u.fogGlow.mul(float(0.08).add(pow(sd, 6.0).mul(0.35))))
   return shade.mul(float(0.86).add(vnoise(xz.mul(7.0)).mul(0.14))).mul(float(0.85).add(amt.mul(0.15)))
+})
+
+// --- 3D value noise (ported from noise3GLSL) ---
+export const hash13 = Fn(([p0]) => {
+  const p = fract(p0.mul(0.1031)).toVar()
+  p.addAssign(dot(p, p.zyx.add(31.32)))
+  return fract(p.x.add(p.y).mul(p.z))
+})
+export const vnoise3 = Fn(([p]) => {
+  const i = floor(p)
+  const f = fract(p)
+  const w = f.mul(f).mul(vec3(3.0).sub(f.mul(2.0)))
+  const h = (x, y, z) => hash13(i.add(vec3(x, y, z)))
+  return mix(
+    mix(mix(h(0, 0, 0), h(1, 0, 0), w.x), mix(h(0, 1, 0), h(1, 1, 0), w.x), w.y),
+    mix(mix(h(0, 0, 1), h(1, 0, 1), w.x), mix(h(0, 1, 1), h(1, 1, 1), w.x), w.y),
+    w.z,
+  )
+})
+export const fbm3g = Fn(([p0]) => {
+  const p = vec3(p0).toVar()
+  const v = float(0).toVar()
+  const a = float(0.5).toVar()
+  Loop(4, () => {
+    v.addAssign(a.mul(vnoise3(p)))
+    p.assign(p.mul(2.03).add(vec3(11.3, 7.1, 3.7)))
+    a.mulAssign(0.5)
+  })
+  return v
 })
