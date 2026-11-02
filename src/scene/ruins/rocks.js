@@ -207,7 +207,9 @@ void main(){
   float rim = pow(max(1.0 - abs(dot(N, -V)), 0.0), 3.0) * pow(max(dot(V, uSunDir), 0.0), 3.0);
   vec3 H = normalize(uSunDir - V);
   float sheen = pow(max(dot(N, H), 0.0), mix(60.0, 20.0, fineInfo.g)) * (0.08 + 0.6 * wet);
-  vec3 col = albedo * (ambient + cSunR * wrap * 0.55) + cSunR * (rim * 0.3 + sheen);
+  // Bounce light from the sand and shallows onto the lower faces (fades with height).
+  vec3 bounce = vec3(0.5, 0.44, 0.64) * pow(clamp(0.5 - 0.5 * N.y, 0.0, 1.0), 1.5) * (1.0 - smoothstep(0.3, 3.0, h)) * 0.35;
+  vec3 col = albedo * (ambient + bounce + cSunR * wrap * 0.55) + cSunR * (rim * 0.3 + sheen);
 
   // Foam lapping where the rock meets the water.
   float t = uTime * uMotion;

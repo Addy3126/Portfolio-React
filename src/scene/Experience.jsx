@@ -68,7 +68,8 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       {debug.shadow && <PianoShadow />}
       {debug.shadow && <BeachShadow />}
 
-      <hemisphereLight args={['#8f86c8', '#20255e', 1.2]} />
+      {/* Ground colour: light bounced up from the lavender field onto the piano. */}
+      <hemisphereLight args={['#8f86c8', '#2c2a6c', 1.2]} />
       <directionalLight position={SUN_DIR.clone().multiplyScalar(100)} color="#f5c8d0" intensity={2.2} />
       <directionalLight position={[-6, 4, 12]} color="#8a8fe0" intensity={0.9} />
       <pointLight position={[-1.45, 0.35, 4.3]} color="#6f9bff" intensity={1.4} distance={4} decay={2} />

@@ -95,7 +95,9 @@ export function rockMaterialGPU() {
     const H = normalize(u.sunDir.sub(V))
     const sheen = pow(max(dot(N, H), 0.0), mix(60.0, 20.0, fine.rough)).mul(float(0.08).add(wet.mul(0.6)))
     const sunC = c('#f5c8d0')
-    const col = albedo.mul(ambient.add(sunC.mul(wrap).mul(0.55))).add(sunC.mul(rim.mul(0.3).add(sheen))).toVar()
+    // Bounce light from the sand and shallows onto the lower faces (fades with height).
+    const bounceR = vec3(0.5, 0.44, 0.64).mul(pow(clamp(float(0.5).sub(N.y.mul(0.5)), 0.0, 1.0), 1.5)).mul(float(1.0).sub(smoothstep(0.3, 3.0, h))).mul(0.35)
+    const col = albedo.mul(ambient.add(bounceR).add(sunC.mul(wrap).mul(0.55))).add(sunC.mul(rim.mul(0.3).add(sheen))).toVar()
 
     // Foam lapping where the rock meets the water.
     const t = u.time.mul(u.motion)
@@ -183,8 +185,14 @@ export function stoneMaterialGPU() {
     const skyR = mix(c('#5a4f9e'), u.fogGlow, pow(max(dot(reflect(V, N), u.sunDir), 0.0), 6.0))
     const reflAmt = wet.mul(fres.mul(0.55).add(0.08)).mul(mix(0.55, 1.0, film))
     const sunC = c('#f5c8d0')
+    // Bounce light: the sunlit sand lights the stone's underside and flanks.
+    const bounceS = vec3(0.56, 0.48, 0.66)
+      .mul(pow(clamp(float(0.5).sub(N.y.mul(0.5)), 0.0, 1.0), 1.5))
+      .mul(float(1.0).sub(smoothstep(-0.2, 0.6, vLocalY)))
+      .mul(float(1.0).sub(wet.mul(0.6)))
+      .mul(0.7)
     const col = albedo
-      .mul(ambient.add(sunC.mul(wrap).mul(0.7)))
+      .mul(ambient.add(bounceS).add(sunC.mul(wrap).mul(0.7)))
       .mul(float(1.0).sub(reflAmt.mul(0.5)))
       .add(sunC.mul(spec))
       .add(skyR.mul(reflAmt))

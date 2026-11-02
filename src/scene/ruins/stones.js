@@ -200,7 +200,9 @@ void main(){
   vec3 skyR = mix(cSkyRefl, uFogGlow, pow(max(dot(R, uSunDir), 0.0), 6.0));
   // Wet film reflects the sky over the whole stone (stronger at grazing angles).
   float reflAmt = wet * (0.08 + 0.55 * fres) * mix(0.55, 1.0, film);
-  vec3 col = albedo * (ambient + cSunS * wrap * 0.7) * (1.0 - reflAmt * 0.5) + cSunS * spec + skyR * reflAmt;
+  // Bounce light: the sunlit sand lights the stone's underside and flanks.
+  vec3 bounce = vec3(0.56, 0.48, 0.66) * pow(clamp(0.5 - 0.5 * N.y, 0.0, 1.0), 1.5) * (1.0 - smoothstep(-0.2, 0.6, vLocalY)) * (1.0 - wet * 0.6) * 0.7;
+  vec3 col = albedo * (ambient + bounce + cSunS * wrap * 0.7) * (1.0 - reflAmt * 0.5) + cSunS * spec + skyR * reflAmt;
 
   // Foam lapping round stones the swash reaches.
   col = mix(col, foamShadeAt(cFoamS, V, vWorld.xz, sw.y), sw.y * 0.85 * (1.0 - smoothstep(0.0, 0.25, vLocalY + 0.3)));
