@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { fogGLSL, noiseGLSL, shadowGLSL, shoreGLSL, swashGLSL } from './glsl'
+import { surfaceUniforms } from './surfaces'
 import { cullHidden } from './visibility'
 import { color, landDist, palette, shared } from './world'
 
@@ -16,6 +17,8 @@ void main(){
 const fragment = /* glsl */ `
 uniform float uTime;
 uniform float uMotion;
+uniform sampler2D tSandS, tSandN, tGravelS, tGravelN, tPebbleS, tPebbleN;
+uniform vec3 cPebble;
 uniform vec3 cNear, cFar, cFrost, cSand, cWet, cCarpet, cRockG, cFoam, cSkyRefl, cSandUnder;
 uniform float uGrassFar;
 uniform vec3 uPianoPos, uPianoGlow;
@@ -52,9 +55,29 @@ void main(){
   // Fine detail fades out with distance so it never turns into blotches or shimmer.
   float near = 1.0 - smoothstep(6.0, 30.0, dist);
   float ripple = sin(dot(vWorld.xz, vec2(0.8, 0.6)) * 7.0 + vnoise(vWorld.xz * 0.6) * 7.0) * 0.5 + 0.5;
-  sand *= 1.0 + (ripple - 0.5) * 0.07 * (1.0 - smoothstep(10.0, 45.0, dist));
+  sand *= 1.0 + (ripple - 0.5) * 0.05 * (1.0 - smoothstep(10.0, 45.0, dist));
   sand *= 1.0 + (vnoise(vWorld.xz * 60.0) - 0.5) * 0.12 * near;
-  float grit = smoothstep(0.86, 0.95, vnoise(vWorld.xz * 38.0)) * near;
+  // Scanned ground: fine beach sand, with gravel and river pebbles on the spit (in
+  // patches, heavier toward its rocky end). Luminance modulates the palette colour, and
+  // the scan's normals are lit by the low sun relative to flat ground (relief without a
+  // change in overall tone). Detail fades with distance.
+  float detail = 1.0 - smoothstep(22.0, 70.0, dist);
+  vec2 xz = vWorld.xz;
+  vec3 sS = texture2D(tSandS, xz / 1.6).rgb, gS = texture2D(tGravelS, xz / 1.1).rgb, pS = texture2D(tPebbleS, xz / 1.4).rgb;
+  vec2 sN = texture2D(tSandN, xz / 1.6).xy, gN = texture2D(tGravelN, xz / 1.1).xy, pN = texture2D(tPebbleN, xz / 1.4).xy;
+  float patchN = vnoise(xz * 0.22 + 5.0);
+  float gravel = spit * smoothstep(0.35, 0.6, patchN);
+  float pebbles = spit * smoothstep(0.62, 0.8, patchN) * smoothstep(-4.0, 1.5, -spitDist(xz));
+  float lumS = mix(mix(sS.r, gS.r, gravel), pS.r, pebbles);
+  vec2 tn = (mix(mix(sN, gN, gravel), pN, pebbles) * 2.0 - 1.0) * detail * mix(1.0, 0.45, sw.z);
+  vec3 Nd = normalize(vec3(tn.x, 1.0, -tn.y));
+  float relief = (max(dot(Nd, uSunDir), 0.0) * 0.8 + 0.35) / (max(uSunDir.y, 0.0) * 0.8 + 0.35);
+  sand *= mix(1.0, lumS * 0.95 + 0.55, detail);
+  sand *= mix(1.0, relief, detail);
+  sand = mix(sand, sand * cPebble * 1.25, pebbles * 0.6);
+  float roughS = mix(mix(sS.g, gS.g, gravel), pS.g, pebbles);
+  sand += uFogGlow * pow(max(dot(reflect(V, Nd), uSunDir), 0.0), 60.0) * sw.z * (1.0 - roughS) * detail * 0.8;
+  float grit = smoothstep(0.86, 0.95, vnoise(vWorld.xz * 38.0)) * near * (1.0 - detail * 0.6);
   sand = mix(sand, cRockG, grit * 0.45 * (0.4 + spit * 0.6));
   col = mix(col, sand, beach);
 
@@ -123,6 +146,10 @@ export default function Ground() {
         fragmentShader: fragment,
         uniforms: {
           ...shared,
+          ...surfaceUniforms('coast_sand_04', 'tSand'),
+          ...surfaceUniforms('clean_pebbles', 'tGravel'),
+          ...surfaceUniforms('ganges_river_pebbles', 'tPebble'),
+          cPebble: { value: color('#8a84b8') },
           cNear: { value: color('#181d4e') },
           cFar: { value: color('#6b62a8') },
           cFrost: { value: color(palette.frost) },

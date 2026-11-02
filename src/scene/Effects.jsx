@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { EffectComposer, GodRays, N8AO, Noise, SMAA, ToneMapping, Vignette, wrapEffect } from '@react-three/postprocessing'
-import { BlendFunction, Effect, KernelSize, ToneMappingMode } from 'postprocessing'
+import { BlendFunction, Effect, EffectAttribute, KernelSize, ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import { reducedMotion } from '../quality'
 import { SUN_DIR } from './world'
@@ -77,6 +77,63 @@ class SanitizeEffect extends Effect {
 }
 const Sanitize = wrapEffect(SanitizeEffect)
 
+// Screen-space contact shadows (as the WebGPU scene): from each pixel a short ray runs
+// toward the sun through the depth buffer; a surface in front of the ray (within a thin
+// slab) shadows the pixel. Small shadows between grass blades, flowers, stones and piano
+// legs that no shadow map resolves. Faded out with distance.
+class ContactShadowEffect extends Effect {
+  constructor() {
+    super(
+      'ContactShadowEffect',
+      /* glsl */ `
+      uniform mat4 uProj;
+      uniform mat4 uProjInv;
+      uniform vec3 uSunView;
+      vec3 viewPos(vec2 p, float d) {
+        vec4 v = uProjInv * vec4(vec3(p, d) * 2.0 - 1.0, 1.0);
+        return v.xyz / v.w;
+      }
+      void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth, out vec4 outputColor) {
+        outputColor = inputColor;
+        if (depth >= 0.99999) return;
+        vec3 P = viewPos(uv, depth);
+        float dist = length(P);
+        if (dist > 40.0) return;
+        float len = clamp(dist * 0.025, 0.12, 0.7);
+        vec3 stepV = uSunView * (len / 12.0);
+        // Interleaved gradient noise (Jimenez) to break up banding.
+        float jitter = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+        vec3 p = P + stepV * jitter;
+        float bias = dist * 0.002 + 0.01;
+        float occ = 0.0;
+        for (int i = 0; i < 12; i++) {
+          p += stepV;
+          vec4 c = uProj * vec4(p, 1.0);
+          vec2 s = c.xy / c.w * 0.5 + 0.5;
+          if (s.x <= 0.0 || s.x >= 1.0 || s.y <= 0.0 || s.y >= 1.0) continue;
+          float dz = viewPos(s, readDepth(s)).z - p.z;
+          if (dz > bias && dz < 0.35) occ = max(occ, 1.0 - float(i) / 12.0 * 0.5);
+        }
+        float lit = 1.0 - occ * (1.0 - smoothstep(18.0, 40.0, dist));
+        outputColor = vec4(inputColor.rgb * mix(vec3(0.52, 0.5, 0.7), vec3(1.0), lit), inputColor.a);
+      }`,
+      {
+        attributes: EffectAttribute.DEPTH,
+        uniforms: new Map([
+          ['uProj', new THREE.Uniform(new THREE.Matrix4())],
+          ['uProjInv', new THREE.Uniform(new THREE.Matrix4())],
+          ['uSunView', new THREE.Uniform(new THREE.Vector3())],
+        ]),
+      },
+    )
+  }
+  track(camera) {
+    this.uniforms.get('uProj').value.copy(camera.projectionMatrix)
+    this.uniforms.get('uProjInv').value.copy(camera.projectionMatrixInverse)
+    this.uniforms.get('uSunView').value.copy(SUN_DIR).transformDirection(camera.matrixWorldInverse)
+  }
+}
+
 // Light source for the shafts: a bright disc where the sky draws the sun.
 // It is never added to the scene; the god-rays pass renders it on its own.
 function useSunSource() {
@@ -92,11 +149,13 @@ function useSunSource() {
 
 // Depth of field was removed: its half-resolution blur produced invalid pixels on the
 // piano's lacquer (black 2x2 specks) on some GPUs.
-export default function Effects({ godRays = true, ao = false, grade = true, tm = null, sanitize = true, msaaOverride = null }) {
+export default function Effects({ godRays = true, ao = false, contact = false, grade = true, tm = null, sanitize = true, msaaOverride = null }) {
   const sun = useSunSource()
   const composer = useRef()
+  const contactFx = useMemo(() => (contact ? new ContactShadowEffect() : null), [contact])
 
   useFrame(({ camera }) => {
+    contactFx?.track(camera)
     if (godRays) {
       sun.position.copy(camera.position).addScaledVector(SUN_DIR, SUN_DISTANCE)
       sun.updateMatrixWorld()
@@ -112,6 +171,7 @@ export default function Effects({ godRays = true, ao = false, grade = true, tm =
           rock crevices. Half resolution keeps it affordable. */}
       {ao && <N8AO halfRes quality="medium" aoRadius={1.2} distanceFalloff={0.6} intensity={2.2} color="#0b0a24" />}
       {sanitize && <Sanitize />}
+      {contactFx && <primitive object={contactFx} />}
       {godRays && (
         <GodRays
           sun={sun}

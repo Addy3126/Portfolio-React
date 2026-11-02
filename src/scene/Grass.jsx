@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { debug } from '../quality'
 import { bedFactor } from './beds'
 import { fogGLSL, noiseGLSL, shadowGLSL } from './glsl'
 import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, landDist, mainDist, palette, shared } from './world'
@@ -343,7 +344,7 @@ export function buildTile(tx, tz, base, rand) {
       width *= 0.55
     }
     offsets.push(x, 0, z)
-    params.push(yaw, height, width, rand())
+    params.push(yaw, height * debug.grassScale, width, rand())
     clumps.push(clump.tone, rel)
     patches.push(fbm(x * 0.09 + 3, z * 0.09 + 3), vnoise(x * 0.16 - 7, z * 0.16 - 7), vnoise(x * 0.05 + 11, z * 0.05 + 11))
     extras.push(0.3 + rand() * 0.7, seed ? 1 : 0)

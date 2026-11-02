@@ -6,8 +6,9 @@ import { tier } from '../quality'
 //   <name>_s : R = albedo luminance (mean 0.5), G = roughness, B = ambient occlusion
 //   <name>_n : RG = tangent-space normal (OpenGL), B = height
 // The scene keeps its own palette: luminance modulates the colour, it doesn't replace it.
-// 2K when the device starts on the ultra tier, 1K otherwise.
-const RES = tier === 'ultra' ? '2k' : '1k'
+// Resolution by starting tier: 2K on ultra, 512 on low and minimal (phones, weak GPUs), 1K
+// otherwise. WebP keeps the download small (KTX2/UASTC measured ~5x larger per texture).
+const RES = tier === 'ultra' ? '2k' : tier === 'low' || tier === 'minimal' ? '512' : '1k'
 const loader = new THREE.TextureLoader()
 const cache = new Map()
 

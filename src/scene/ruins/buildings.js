@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { fogGLSL, noiseGLSL } from '../glsl'
+import { surfaceUniforms } from '../surfaces'
 import { color, shared } from '../world'
 
 // Part kinds, stored per vertex so one material can shade a whole building.
@@ -156,6 +157,7 @@ void main(){
 `
 
 const fragment = /* glsl */ `
+uniform sampler2D tWallS, tWallN, tPlasterS, tPlasterN;
 uniform vec3 cWall, cWall2, cMortar, cSlab, cCore, cRebar, cVine, cTrim, cFrostB, cWetB, cSaltB, cAlgae, cSkyB, cGroundB, cSunB;
 varying vec3 vWorld;
 varying vec3 vNormalW;
@@ -173,37 +175,38 @@ void main(){
   float u = abs(N.x) > abs(N.z) ? vWorld.z : vWorld.x;
   float detail = 1.0 - smoothstep(50.0, 140.0, dist);
 
+  // Photo-scanned masonry mapped along the face (concrete, mixed brick or rustic stone),
+  // with patches of damaged plaster on concrete.
+  bool flatFace = abs(N.y) > 0.7;
+  vec2 tuv = (flatFace ? vWorld.xz : vec2(u, y)) / TEX_SIZE;
+  vec3 ws = texture2D(tWallS, tuv).rgb;
+  vec2 wn = texture2D(tWallN, tuv).xy;
+  #if STYLE == 0
+    float plasterMask = smoothstep(0.55, 0.7, vnoise(vec2(u, y) * 0.18 + vec2(3.1, 7.7)));
+    vec3 ps = texture2D(tPlasterS, tuv * 1.3).rgb;
+    ws = mix(ws, ps, plasterMask);
+    wn = mix(wn, texture2D(tPlasterN, tuv * 1.3).xy, plasterMask);
+  #endif
+  float lum = ws.r;
+  bool masonry = k < 2.5 || abs(k - 6.0) < 0.5;
+  if (masonry) {
+    vec2 tn = (wn * 2.0 - 1.0) * detail;
+    vec3 T = flatFace ? vec3(1.0, 0.0, 0.0) : (abs(N.x) > abs(N.z) ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0));
+    vec3 B = flatFace ? vec3(0.0, 0.0, 1.0) : vec3(0.0, 1.0, 0.0);
+    N = normalize(N + T * tn.x + B * tn.y);
+  }
+  float aoTex = masonry ? mix(1.0, ws.b, detail) : 1.0;
+
   vec3 albedo = cWall;
   if (k < 0.5 || abs(k - 2.0) < 0.5) {
-    albedo = mix(cWall, cWall2, vnoise(vec2(u * 0.35, y * 0.25)));
-    #if STYLE == 1
-      // Brick courses with staggered joints.
-      float row = floor(y / 0.22);
-      float bu = fract((u + mod(row, 2.0) * 0.25) / 0.5);
-      float bv = fract(y / 0.22);
-      float joint = max(1.0 - smoothstep(0.0, 0.07, bu), 1.0 - smoothstep(0.0, 0.12, bv));
-      albedo *= 0.85 + 0.3 * hash12(vec2(floor((u + mod(row, 2.0) * 0.25) / 0.5), row));
-      albedo = mix(albedo, cMortar, joint * detail * 0.8);
-    #elif STYLE == 2
-      // Dressed stone blocks.
-      float row = floor(y / 0.45);
-      float bu = fract((u + mod(row, 2.0) * 0.45) / 0.9);
-      float bv = fract(y / 0.45);
-      float joint = max(1.0 - smoothstep(0.0, 0.035, bu), 1.0 - smoothstep(0.0, 0.07, bv));
-      albedo *= 0.88 + 0.24 * hash12(vec2(floor((u + mod(row, 2.0) * 0.45) / 0.9), row));
-      albedo = mix(albedo, cMortar, joint * detail * 0.7);
-    #else
-      // Cast concrete panels with thin seams.
-      float seam = min(min(fract(u / 1.5), 1.0 - fract(u / 1.5)), min(fract(y / 3.0), 1.0 - fract(y / 3.0)));
-      albedo *= 1.0 - 0.35 * (1.0 - smoothstep(0.0, 0.025, seam)) * detail;
-    #endif
+    albedo = mix(cWall, cWall2, vnoise(vec2(u * 0.35, y * 0.25))) * (lum * 1.1 + 0.45);
     if (abs(k - 2.0) < 0.5) albedo *= 0.9;
   }
-  if (abs(k - 1.0) < 0.5) albedo = cSlab;
+  if (abs(k - 1.0) < 0.5) albedo = cSlab * (lum * 0.8 + 0.6);
   if (abs(k - 3.0) < 0.5) albedo = cCore;
   if (abs(k - 4.0) < 0.5) albedo = cRebar;
   if (abs(k - 5.0) < 0.5) albedo = cVine * (0.7 + 0.6 * vnoise(vWorld.xy * 3.0 + vWorld.z));
-  if (abs(k - 6.0) < 0.5) albedo = cTrim;
+  if (abs(k - 6.0) < 0.5) albedo = cTrim * (lum * 0.8 + 0.6);
 
   // Light weathering on masonry: rain streaks, grime low down, waterline staining, frost on ledges.
   if (k < 2.5 || abs(k - 6.0) < 0.5) {
@@ -227,7 +230,7 @@ void main(){
     albedo = mix(albedo, cFrostB, up * 0.6);
   }
 
-  vec3 ambient = mix(cGroundB, cSkyB, N.y * 0.5 + 0.5);
+  vec3 ambient = mix(cGroundB, cSkyB, N.y * 0.5 + 0.5) * aoTex;
   float wrap = max((dot(N, uSunDir) + 0.3) / 1.3, 0.0);
   float rim = pow(max(1.0 - abs(dot(N, -V)), 0.0), 3.0) * pow(max(dot(V, uSunDir), 0.0), 3.0);
   vec3 col = albedo * (ambient + cSunB * wrap * 0.45) + cSunB * rim * 0.3;
@@ -237,9 +240,9 @@ void main(){
 `
 
 const PALETTES = {
-  concrete: { wall: '#3a3652', wall2: '#2e2b45', mortar: '#4a4664', trim: '#46425f' },
-  brick: { wall: '#4a2f40', wall2: '#3a2536', mortar: '#6a6080', trim: '#5a5270' },
-  stone: { wall: '#4a4660', wall2: '#3c3852', mortar: '#2a273d', trim: '#575270' },
+  concrete: { wall: '#3a3652', wall2: '#2e2b45', mortar: '#4a4664', trim: '#46425f', tex: 'concrete_wall_008', size: 3.0 },
+  brick: { wall: '#4a2f40', wall2: '#3a2536', mortar: '#6a6080', trim: '#5a5270', tex: 'mixed_brick_wall', size: 2.0 },
+  stone: { wall: '#4a4660', wall2: '#3c3852', mortar: '#2a273d', trim: '#575270', tex: 'rustic_stone_wall', size: 2.6 },
 }
 
 export function buildingMaterial(style) {
@@ -247,9 +250,11 @@ export function buildingMaterial(style) {
   return new THREE.ShaderMaterial({
     vertexShader: vertex,
     fragmentShader: fragment,
-    defines: { STYLE: style === 'brick' ? 1 : style === 'stone' ? 2 : 0 },
+    defines: { STYLE: style === 'brick' ? 1 : style === 'stone' ? 2 : 0, TEX_SIZE: p.size.toFixed(1) },
     uniforms: {
       ...shared,
+      ...surfaceUniforms(p.tex, 'tWall'),
+      ...surfaceUniforms('damaged_plaster', 'tPlaster'),
       cWall: { value: color(p.wall) },
       cWall2: { value: color(p.wall2) },
       cMortar: { value: color(p.mortar) },

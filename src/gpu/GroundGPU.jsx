@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
 import * as THREE from 'three/webgpu'
-import { Fn, If, cameraPosition, clamp, dot, float, length, max, mix, normalize, positionWorld, pow, reflect, sin, smoothstep, step, vec2, vec3 } from 'three/tsl'
+import { Fn, If, cameraPosition, clamp, dot, float, length, max, mix, normalize, positionWorld, pow, reflect, sin, smoothstep, step, texture, vec2, vec3 } from 'three/tsl'
 import { cullHidden } from '../scene/visibility'
 import { color, landDist as landDistJS, palette } from '../scene/world'
 import { pianoShadow } from './shadow'
-import { applyFog, foamShadeAt, landDist, mainDist, swash, u, vnoise } from './tsl'
+import { surface } from './textures'
+import { applyFog, foamShadeAt, landDist, mainDist, spitDist, swash, u, vnoise } from './tsl'
 
 // Ground, as the WebGL ground: field soil, beach and spit sand (ripples, grain, grit), the
 // shore swash (water sheet, foam, wet sand) shared with the sea, seabed darkening, far
@@ -33,6 +34,9 @@ export default function GroundGPU() {
   const geometry = useMemo(groundGeometry, [])
   const material = useMemo(() => {
     const m = new THREE.MeshBasicNodeMaterial({ fog: false })
+    const sandTex = surface('coast_sand_04')
+    const gravelTex = surface('clean_pebbles')
+    const pebbleTex = surface('ganges_river_pebbles')
     m.colorNode = Fn(() => {
       const W = positionWorld
       const toP = W.sub(cameraPosition)
@@ -55,9 +59,35 @@ export default function GroundGPU() {
       // Sand surface: soft wind ripples, fine grain and a sprinkling of tiny dark grit.
       const near = float(1.0).sub(smoothstep(6.0, 30.0, dist))
       const ripple = sin(dot(xz, vec2(0.8, 0.6)).mul(7.0).add(vnoise(xz.mul(0.6)).mul(7.0))).mul(0.5).add(0.5)
-      sand.mulAssign(float(1.0).add(ripple.sub(0.5).mul(0.07).mul(float(1.0).sub(smoothstep(10.0, 45.0, dist)))))
-      sand.mulAssign(float(1.0).add(vnoise(xz.mul(60.0)).sub(0.5).mul(0.12).mul(near)))
-      const grit = smoothstep(0.86, 0.95, vnoise(xz.mul(38.0))).mul(near)
+      sand.mulAssign(float(1.0).add(ripple.sub(0.5).mul(0.05).mul(float(1.0).sub(smoothstep(10.0, 45.0, dist)))))
+      // Scanned ground: fine beach sand, with gravel and river pebbles on the spit (in
+      // patches, heavier toward its rocky end). Luminance modulates the palette colour, and
+      // the scan's normals are lit by the low sun relative to flat ground, so ripples and
+      // pebbles stand out without changing the overall tone. Detail fades with distance.
+      const detail = float(1.0).sub(smoothstep(22.0, 70.0, dist)).toVar()
+      const sS = texture(sandTex.s, xz.div(1.6))
+      const sN = texture(sandTex.n, xz.div(1.6))
+      const gS = texture(gravelTex.s, xz.div(1.1))
+      const gN = texture(gravelTex.n, xz.div(1.1))
+      const pS = texture(pebbleTex.s, xz.div(1.4))
+      const pN = texture(pebbleTex.n, xz.div(1.4))
+      const patch = vnoise(xz.mul(0.22).add(5.0))
+      const gravel = spit.mul(smoothstep(0.35, 0.6, patch)).toVar()
+      const pebbles = spit.mul(smoothstep(0.62, 0.8, patch)).mul(smoothstep(-4.0, 1.5, spitDist(xz).negate())).toVar()
+      const lum = mix(mix(sS.r, gS.r, gravel), pS.r, pebbles)
+      const tn = mix(mix(sN.xy, gN.xy, gravel), pN.xy, pebbles).mul(2.0).sub(1.0).mul(detail).mul(mix(1.0, 0.45, sw.z))
+      const Nd = normalize(vec3(tn.x, 1.0, tn.y.negate()))
+      const L = u.sunDir
+      const relief = max(dot(Nd, L), 0.0).mul(0.8).add(0.35).div(max(L.y, 0.0).mul(0.8).add(0.35))
+      sand.mulAssign(mix(float(1.0), lum.mul(0.95).add(0.55), detail))
+      sand.mulAssign(mix(float(1.0), relief, detail))
+      // Pebbles are a little darker and cooler than the sand they sit in.
+      sand.assign(mix(sand, sand.mul(c('#8a84b8')).mul(1.25), pebbles.mul(0.6)))
+      // Wet sand: smooth spots catch a sharp glint of the glow.
+      const rough = mix(mix(sS.g, gS.g, gravel), pS.g, pebbles)
+      const Rd = reflect(V, Nd)
+      sand.addAssign(u.fogGlow.mul(pow(max(dot(Rd, L), 0.0), 60.0)).mul(sw.z).mul(float(1.0).sub(rough)).mul(detail).mul(0.8))
+      const grit = smoothstep(0.86, 0.95, vnoise(xz.mul(38.0))).mul(near).mul(float(1.0).sub(detail.mul(0.6)))
       sand.assign(mix(sand, c('#3a3558'), grit.mul(0.45).mul(float(0.4).add(spit.mul(0.6)))))
       col.assign(mix(col, sand, beach))
 
