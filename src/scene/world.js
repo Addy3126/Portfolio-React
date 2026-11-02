@@ -94,6 +94,7 @@ export const shared = {
   uCursorStrength: { value: 0 },
   // Distance from the camera where grass blades stop; the ground paints a carpet beyond.
   uGrassFar: { value: 999 },
+  uGrassHi: { value: 0 },
 }
 
 export const color = c

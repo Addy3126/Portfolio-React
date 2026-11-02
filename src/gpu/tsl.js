@@ -40,6 +40,7 @@ export const u = {
   pianoGlow: uniform(shared.uPianoGlow.value),
   glowPulse: uniform(1),
   grassFar: uniform(999),
+  grassHi: uniform(0),
   cursor: uniform(shared.uCursor.value),
   cursorStrength: uniform(0),
 }
@@ -48,6 +49,7 @@ export function sync() {
   u.motion.value = shared.uMotion.value
   u.glowPulse.value = shared.uGlowPulse.value
   u.grassFar.value = shared.uGrassFar.value
+  u.grassHi.value = shared.uGrassHi.value
   u.cursorStrength.value = shared.uCursorStrength.value
 }
 

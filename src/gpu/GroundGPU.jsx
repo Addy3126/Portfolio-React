@@ -106,7 +106,7 @@ export default function GroundGPU() {
       })
       col.assign(mix(col, c('#3c3f8c').mul(0.5), float(1.0).sub(smoothstep(-1.5, -0.1, inland))))
 
-      const far = smoothstep(u.grassFar.sub(4.0), u.grassFar, length(xz.sub(cameraPosition.xz)))
+      const far = smoothstep(u.grassFar.sub(9.0), u.grassFar.sub(3.0), length(xz.sub(cameraPosition.xz)))
       const carpet = c('#8a82cf').mul(float(0.8).add(vnoise(xz.mul(0.6)).mul(0.35))).mul(float(0.85).add(vnoise(xz.mul(0.09).add(3.0)).mul(0.3)))
       col.assign(mix(col, carpet, far.mul(float(1.0).sub(beach)).mul(step(0.0, inland))))
 
