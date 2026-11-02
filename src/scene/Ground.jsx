@@ -110,7 +110,7 @@ void main(){
   col += cFrost * back * 0.25 * (1.0 - beach);
 
   // Piano shadow and contact darkening.
-  float sh = pianoShadow(vWorld);
+  float sh = pianoShadow(vWorld) * mix(1.0, beachShadow(vWorld), 0.9);
   col *= mix(0.45, 1.0, sh) * pianoContact(vWorld.xz);
 
   float pd = length(vWorld.xz - uPianoPos.xz);

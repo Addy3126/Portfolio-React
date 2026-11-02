@@ -87,6 +87,8 @@ export const shared = {
   // Piano shadow map (white placeholder until the real one is rendered).
   uShadowMap: { value: (() => { const t = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); t.needsUpdate = true; return t })() },
   uShadowMatrix: { value: new THREE.Matrix4() },
+  uBeachMap: { value: (() => { const t = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1); t.needsUpdate = true; return t })() },
+  uBeachMatrix: { value: new THREE.Matrix4() },
   // Cursor position on the field (x/z) and how strongly grass parts around it.
   uCursor: { value: new THREE.Vector2(999, 999) },
   uCursorStrength: { value: 0 },

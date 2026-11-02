@@ -5,6 +5,7 @@ import { seeded } from './ruins/noise3'
 import { rockGeometry, rockMaterial } from './ruins/rocks'
 import { cobbleGeometry, pebbleGeometry, stoneMaterial } from './ruins/stones'
 import { plateauTopAt } from './Plateau'
+import { BEACH_LAYER } from './BeachShadow'
 import { cullHidden } from './visibility'
 import { bankX, shoreZ, spitHalfWidth, spitPoint } from './world'
 
@@ -140,6 +141,7 @@ export function rockGroups(mat, stoneMat) {
       })
       mesh.geometry.setAttribute('iInfo', new THREE.InstancedBufferAttribute(info, 4))
       mesh.computeBoundingSphere()
+      mesh.layers.enable(BEACH_LAYER) // casts into the baked beach shadows
       return mesh
     })
     .filter(Boolean)

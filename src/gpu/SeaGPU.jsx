@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react'
 import * as THREE from 'three/webgpu'
 import {
   Discard,
+  abs,
   Fn,
   If,
   cameraPosition,
@@ -23,6 +24,7 @@ import {
   vec2,
   vec3,
 } from 'three/tsl'
+import { LANES, LANE_DIR } from '../scene/sunLanes'
 import { color, palette } from '../scene/world'
 import { applyFog, foamShadeAt, landDist, seabedY, spow, swash, u, viewNormal, vnoise } from './tsl'
 
@@ -142,16 +144,34 @@ function seaMaterial(refl) {
     const reflAmt = clamp(fresnel.mul(1.15).add(0.08), 0.0, 1.0).mul(float(1.0).sub(trans.g.mul(0.5)))
     const col = mix(body, reflCol, reflAmt).toVar()
 
+    // Sun lanes: towers in the sea block the low sunlight on the water behind them
+    // (see scene/sunLanes.js).
+    const laneS = float(0.0).toVar()
+    for (const [lx, lz, lhw, llen] of LANES) {
+      const rel = p.sub(vec2(lx, lz))
+      const along = dot(rel, vec2(...LANE_DIR))
+      const perp = abs(rel.x.mul(LANE_DIR[1]).sub(rel.y.mul(LANE_DIR[0])))
+      const hw = along.mul(0.006).add(lhw)
+      const soft = along.mul(0.004).add(0.4)
+      const lane = float(1.0)
+        .sub(smoothstep(hw.sub(soft), hw.add(soft), perp))
+        .mul(smoothstep(0.0, 3.0, along))
+        .mul(float(1.0).sub(smoothstep(llen * 0.6, llen, along)))
+      laneS.assign(max(laneS, lane))
+    }
+    const sunLit = float(1.0).sub(laneS.mul(0.85)).toVar()
+    col.mulAssign(mix(0.9, 1.0, sunLit))
+
     // Light through the wave crests when looking toward the low sun.
     const crest = max(W.y.add(0.04), 0.0)
     const towardSun = spow(dot(V, u.sunDir), 3.0)
-    col.addAssign(c('#8f7cf0').mul(crest.mul(9.0)).mul(towardSun).mul(float(1.0).sub(fresnel)).mul(float(1.0).sub(smoothstep(60.0, 300.0, dist))))
+    col.addAssign(c('#8f7cf0').mul(sunLit).mul(crest.mul(9.0)).mul(towardSun).mul(float(1.0).sub(fresnel)).mul(float(1.0).sub(smoothstep(60.0, 300.0, dist))))
 
     // Sun glitter: sharp highlights nearby, a broader streak in the distance.
     const sd = max(dot(reflect(V, n), u.sunDir), 0.0)
     const farF = smoothstep(6.0, 400.0, dist)
-    col.addAssign(vec3(5.0, 4.6, 4.4).mul(spow(sd, mix(2600.0, 260.0, farF))).mul(mix(1.0, 0.45, farF)))
-    col.addAssign(c(palette.glow).mul(spow(sd, 60.0)).mul(0.18))
+    col.addAssign(vec3(5.0, 4.6, 4.4).mul(sunLit).mul(spow(sd, mix(2600.0, 260.0, farF))).mul(mix(1.0, 0.45, farF)))
+    col.addAssign(c(palette.glow).mul(sunLit).mul(spow(sd, 60.0)).mul(0.18))
 
     // Shore swash foam (shared with the ground so they meet seamlessly).
     const sw = swash(p, L, t)

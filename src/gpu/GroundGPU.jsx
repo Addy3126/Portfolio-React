@@ -3,7 +3,7 @@ import * as THREE from 'three/webgpu'
 import { Fn, If, cameraPosition, clamp, dot, float, length, max, mix, normalize, positionWorld, pow, reflect, sin, smoothstep, step, texture, vec2, vec3 } from 'three/tsl'
 import { cullHidden } from '../scene/visibility'
 import { color, landDist as landDistJS, palette } from '../scene/world'
-import { pianoShadow } from './shadow'
+import { beachShadow, pianoShadow } from './shadow'
 import { surface } from './textures'
 import { applyFog, foamShadeAt, landDist, mainDist, spitDist, swash, u, vnoise } from './tsl'
 
@@ -114,7 +114,7 @@ export default function GroundGPU() {
       col.addAssign(c(palette.frost).mul(back).mul(0.25).mul(float(1.0).sub(beach)))
 
       // Piano shadow, and contact darkening under the piano and bench.
-      col.mulAssign(mix(0.45, 1.0, pianoShadow(W)))
+      col.mulAssign(mix(0.45, 1.0, pianoShadow(W).mul(mix(1.0, beachShadow(W), 0.9))))
       const e = length(xz.sub(vec2(-1.45, 3.7)).div(vec2(1.45, 0.85)))
       const bench = length(xz.sub(vec2(-3.33, 3.7)).div(vec2(0.32, 0.55)))
       col.mulAssign(float(1.0).sub(float(1.0).sub(smoothstep(0.55, 1.35, e)).mul(0.45)).mul(float(1.0).sub(float(1.0).sub(smoothstep(0.6, 1.4, bench)).mul(0.3))))

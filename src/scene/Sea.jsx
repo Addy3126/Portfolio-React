@@ -3,6 +3,7 @@ import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js'
 import { fogGLSL, noiseGLSL, shoreGLSL, swashGLSL } from './glsl'
+import { sunLanesGLSL } from './sunLanes'
 import { color, hideInReflection, palette, shared } from './world'
 
 const SEA_LEVEL = -0.04
@@ -64,6 +65,7 @@ ${noiseGLSL}
 ${fogGLSL}
 ${shoreGLSL}
 ${swashGLSL}
+${sunLanesGLSL}
 
 // Slope of one travelling sine wave (deep-water dispersion).
 vec2 waveSlope(vec2 p, vec2 dir, float len, float amp, float t){
@@ -132,14 +134,17 @@ void main(){
   // swell glow (subsurface scattering, as in game ocean shaders).
   float crest = max(vWorld.y + 0.04, 0.0);
   float towardSun = spow(dot(V, uSunDir), 3.0);
-  col += cScatter * crest * 9.0 * towardSun * (1.0 - fresnel) * (1.0 - smoothstep(60.0, 300.0, dist));
+  // Sun lanes: towers in the sea block the low sunlight on the water behind them.
+  float sunLit = 1.0 - 0.85 * laneShadow(p);
+  col *= mix(0.9, 1.0, sunLit);
+  col += sunLit * cScatter * crest * 9.0 * towardSun * (1.0 - fresnel) * (1.0 - smoothstep(60.0, 300.0, dist));
 
   // Sun glitter: sharp highlights nearby, a broader streak in the distance.
   vec3 R = reflect(V, n);
   float sd = max(dot(R, uSunDir), 0.0);
   float shin = mix(2600.0, 260.0, smoothstep(6.0, 400.0, dist));
-  col += vec3(5.0, 4.6, 4.4) * spow(sd, shin) * mix(1.0, 0.45, smoothstep(6.0, 400.0, dist));
-  col += cGlow * spow(sd, 60.0) * 0.18;
+  col += sunLit * vec3(5.0, 4.6, 4.4) * spow(sd, shin) * mix(1.0, 0.45, smoothstep(6.0, 400.0, dist));
+  col += sunLit * cGlow * spow(sd, 60.0) * 0.18;
 
   // Shore swash foam (shared with the sand shader so they meet seamlessly).
   vec4 sw = swash(p, landDist(p), t);

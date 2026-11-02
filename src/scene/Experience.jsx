@@ -12,6 +12,7 @@ import Life from './Life'
 import { Adaptive, FrameLimiter } from './Perf'
 import Petals from './Petals'
 import Piano from './Piano'
+import BeachShadow from './BeachShadow'
 import PianoShadow from './PianoShadow'
 import Ruins from './Ruins'
 import Rocks from './Rocks'
@@ -65,6 +66,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       <CameraRig />
       <CursorField />
       {debug.shadow && <PianoShadow />}
+      {debug.shadow && <BeachShadow />}
 
       <hemisphereLight args={['#8f86c8', '#20255e', 1.2]} />
       <directionalLight position={SUN_DIR.clone().multiplyScalar(100)} color="#f5c8d0" intensity={2.2} />

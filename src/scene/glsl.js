@@ -84,6 +84,22 @@ float pianoShadow(vec3 wp){
   }
   return lit / 25.0;
 }
+// Baked shadows of the beach stones and rocks (scene/BeachShadow.jsx); 1 = lit.
+uniform sampler2D uBeachMap;
+uniform mat4 uBeachMatrix;
+float beachShadow(vec3 wp){
+  vec4 sc = uBeachMatrix * vec4(wp, 1.0);
+  vec3 c = sc.xyz / sc.w;
+  if (c.x < 0.0 || c.x > 1.0 || c.y < 0.0 || c.y > 1.0 || c.z > 1.0) return 1.0;
+  float lit = 0.0;
+  for (int i = -1; i <= 1; i++) {
+    for (int j = -1; j <= 1; j++) {
+      float d = textureLod(uBeachMap, c.xy + vec2(float(i), float(j)) / 2048.0, 0.0).r;
+      lit += (c.z - 0.0008 > d) ? 0.0 : 1.0;
+    }
+  }
+  return lit / 9.0;
+}
 float pianoContact(vec2 xz){
   float e = length((xz - vec2(-1.45, 3.7)) / vec2(1.45, 0.85));
   float bench = length((xz - vec2(-3.33, 3.7)) / vec2(0.32, 0.55));

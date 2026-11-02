@@ -15,7 +15,7 @@ import GrassGPU from './GrassGPU'
 import GroundGPU from './GroundGPU'
 import RocksGPU from './RocksGPU'
 import { PlateauGPU, RuinsGPU } from './RuinsGPU'
-import { PianoShadowGPU } from './shadow'
+import { BeachShadowGPU, PianoShadowGPU } from './shadow'
 import SeaGPU, { REFLECTION_HIDDEN, seaSwap } from './SeaGPU'
 import SkyGPU from './SkyGPU'
 import { sync } from './tsl'
@@ -126,6 +126,7 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       <CameraRig />
       <CursorField />
       {debug.shadow && <PianoShadowGPU />}
+      {debug.shadow && <BeachShadowGPU />}
 
       <hemisphereLight args={['#8f86c8', '#20255e', 1.2]} />
       <directionalLight position={SUN_DIR.clone().multiplyScalar(100)} color="#f5c8d0" intensity={2.2} />

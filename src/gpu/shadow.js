@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
 import { Fn, If, float, texture, uniform, vec2, vec4 } from 'three/tsl'
 import { SHADOW_LAYER } from '../scene/PianoShadow'
+import { beachCamera } from '../scene/BeachShadow'
 import { PIANO_CENTRE, SHADOW_DIR } from '../scene/world'
 
 // The piano's cast shadow on the WebGPU path, as scene/PianoShadow on WebGL: its depth is
@@ -76,5 +77,59 @@ export function PianoShadowGPU() {
   })
 
   useEffect(() => () => (shadowOn.value = 0), [])
+  return null
+}
+
+// Baked shadows of the beach stones and rocks (as scene/BeachShadow.jsx). 1 = lit.
+const BSIZE = 2048
+const beachTarget = new THREE.RenderTarget(BSIZE, BSIZE, { depthBuffer: true })
+beachTarget.depthTexture = new THREE.DepthTexture(BSIZE, BSIZE)
+const beachMatrix = uniform(new THREE.Matrix4())
+const beachOn = uniform(0)
+const beachTex = texture(beachTarget.depthTexture)
+export const beachShadow = Fn(([wp]) => {
+  const lit = float(1.0).toVar()
+  const sc = beachMatrix.mul(vec4(wp, 1.0))
+  const p = sc.xyz.div(sc.w).toVar()
+  If(beachOn.greaterThan(0.5).and(p.x.greaterThan(0.0)).and(p.x.lessThan(1.0)).and(p.y.greaterThan(0.0)).and(p.y.lessThan(1.0)).and(p.z.lessThan(1.0)), () => {
+    const sum = float(0.0).toVar()
+    for (let i = -1; i <= 1; i++) {
+      for (let j = -1; j <= 1; j++) {
+        const d = beachTex.sample(p.xy.add(vec2(i / BSIZE, j / BSIZE))).level(0).x
+        sum.addAssign(p.z.sub(0.0008).greaterThan(d).select(0.0, 1.0))
+      }
+    }
+    lit.assign(sum.div(9.0))
+  })
+  return lit
+})
+
+export function BeachShadowGPU() {
+  const { gl, scene } = useThree()
+  const done = useRef(0)
+  const camera = useRef(null)
+  if (!camera.current) camera.current = beachCamera(THREE.OrthographicCamera)
+  useFrame(() => {
+    if (done.current > 3) return
+    if (++done.current < 3) return
+    const cam = camera.current
+    const override = scene.overrideMaterial
+    const background = scene.background
+    scene.overrideMaterial = new THREE.MeshBasicNodeMaterial({ side: THREE.DoubleSide })
+    scene.background = null
+    const prev = gl.getRenderTarget()
+    gl.setRenderTarget(beachTarget)
+    gl.clear()
+    gl.render(scene, cam)
+    gl.setRenderTarget(prev)
+    scene.overrideMaterial.dispose()
+    scene.overrideMaterial = override
+    scene.background = background
+    const webgpuDepth = cam.coordinateSystem === THREE.WebGPUCoordinateSystem
+    const bias = new THREE.Matrix4().set(0.5, 0, 0, 0.5, 0, -0.5, 0, 0.5, 0, 0, webgpuDepth ? 1 : 0.5, webgpuDepth ? 0 : 0.5, 0, 0, 0, 1)
+    beachMatrix.value.copy(bias).multiply(cam.projectionMatrix).multiply(cam.matrixWorldInverse)
+    beachOn.value = 1
+  })
+  useEffect(() => () => (beachOn.value = 0), [])
   return null
 }
