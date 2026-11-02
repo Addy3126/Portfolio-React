@@ -177,7 +177,7 @@ class LensFlareEffect extends Effect {
         ${GHOSTS.map(([f, r, t]) => `{ float d = length((uv - (uSun + toC * ${f.toFixed(3)})) * A);
           res += ${f3(t)} * (1.0 - smoothstep(${(r * 0.55).toFixed(4)}, ${r.toFixed(4)}, d)) * (0.55 + 0.45 * smoothstep(${(r * 0.4).toFixed(4)}, ${r.toFixed(4)}, d)) * 0.16; }`).join('\n        ')}
         float hd = length((uv - (uSun + toC)) * A);
-        res += vec3(0.5, 0.42, 0.85) * exp(-abs(hd - 0.32) * 60.0) * 0.05;
+        res += vec3(0.5, 0.42, 0.85) * exp(-abs(hd - 0.32) * 60.0) * 0.03;
         vec2 ds = (uv - uSun) * A;
         res += vec3(0.75, 0.7, 1.0) * exp(-abs(ds.y) * 320.0) * exp(-abs(ds.x) * 4.5) * 0.32;
         res += vec3(1.0, 0.85, 0.8) * exp(-length(ds) * 14.0) * 0.12;

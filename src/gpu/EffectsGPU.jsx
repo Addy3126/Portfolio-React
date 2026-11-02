@@ -261,7 +261,7 @@ export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false,
           }
           // Halo ring centred on the screen-mirrored sun.
           const hd = length(uv().sub(sunUV.add(toC.mul(1.0))).mul(A))
-          res.addAssign(vec3(0.5, 0.42, 0.85).mul(exp(abs(hd.sub(0.32)).mul(-60.0))).mul(0.05))
+          res.addAssign(vec3(0.5, 0.42, 0.85).mul(exp(abs(hd.sub(0.32)).mul(-60.0))).mul(0.03))
           // Horizontal streak and glare around the sun.
           const ds = uv().sub(sunUV).mul(A)
           res.addAssign(vec3(0.75, 0.7, 1.0).mul(exp(abs(ds.y).mul(-320.0))).mul(exp(abs(ds.x).mul(-4.5))).mul(0.32))

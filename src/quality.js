@@ -74,6 +74,7 @@ export const debug = {
   grassWidth: Math.min(2, Math.max(0.2, Number(params.get('grasswidth')) || 1)),
   contact: !off('contact'),
   flare: !off('flare'),
+  life: !off('life'),
   grade: !off('grade'),
   // ?tm=agx|aces|neutral picks the tone mapper (for comparisons).
   tm: params.get('tm'),
