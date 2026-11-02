@@ -1,46 +1,61 @@
-// Picks a rendering tier once at startup. Override with ?quality=low|mid|high.
+// Rendering tiers, lightest to richest. The starting tier is a guess from the device (GPU
+// name, memory, phone or desktop); at runtime the scene then adapts (see scene/Perf.jsx):
+// render resolution first, then the tier, down when frames run late and back up when there
+// is steady headroom. ?quality=minimal|low|mid|high|ultra pins the starting tier.
 const TIERS = {
-  high: { grassDensity: 140, grassHi: 10, grassLo: 28, effects: 'full', petals: 1500, dpr: [1, 1.25], reflection: 0.5 },
-  mid: { grassDensity: 80, grassHi: 8, grassLo: 24, effects: 'full', petals: 800, dpr: [1, 1.25], reflection: 0.35 },
+  minimal: { grassDensity: 22, grassHi: 0, grassLo: 14, effects: 'basic', petals: 140, dpr: [0.75, 0.75], reflection: 0 },
   low: { grassDensity: 40, grassHi: 0, grassLo: 20, effects: 'basic', petals: 320, dpr: [1, 1], reflection: 0 },
+  mid: { grassDensity: 80, grassHi: 8, grassLo: 24, effects: 'full', petals: 800, dpr: [1, 1.25], reflection: 0.35 },
+  high: { grassDensity: 140, grassHi: 10, grassLo: 28, effects: 'full', petals: 1500, dpr: [1, 1.25], reflection: 0.5 },
+  ultra: { grassDensity: 190, grassHi: 13, grassLo: 34, effects: 'full', petals: 2000, dpr: [1, 1.5], reflection: 0.6 },
 }
+export const TIER_ORDER = ['minimal', 'low', 'mid', 'high', 'ultra']
 
 // Frames per second the scene renders at (the page itself still scrolls at full rate).
 export const FPS_CAP = 45
 
-// Auto quality steps down from the starting tier when frames run long.
-// 0 = as detected, 1 = lighter, 2 = lightest.
-export const MAX_LEVEL = 2
-export function settingsFor(level) {
-  const q = { ...TIERS[tier] }
-  q.godRays = q.effects === 'full' && level < 1
-  q.ao = q.effects === 'full' && level < 1
-  if (level >= 1) {
-    q.dpr = [1, 1]
-    q.grassHi *= 0.7
-    q.grassDensity = Math.round(q.grassDensity * 0.85)
-    q.reflection *= 0.6
-  }
-  if (level >= 2) {
-    q.reflection = 0
-    q.grassHi = 0 // simple blades only
-    q.grassDensity = Math.round(q.grassDensity * 0.6)
-    q.petals = Math.round(q.petals * 0.6)
-  }
+export function settingsFor(tierName) {
+  const q = { ...TIERS[tierName] }
+  q.tier = tierName
+  q.godRays = q.effects === 'full'
+  q.ao = q.effects === 'full'
   return q
+}
+
+// The GPU's name, from WebGL (the same string WebGPU adapters describe).
+function gpuName() {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl')
+    const ext = gl?.getExtension('WEBGL_debug_renderer_info')
+    const name = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl?.getParameter(gl.RENDERER)
+    gl?.getExtension('WEBGL_lose_context')?.loseContext()
+    return String(name || '')
+  } catch {
+    return ''
+  }
 }
 
 function pickTier() {
   const forced = new URLSearchParams(window.location.search).get('quality')
   if (forced && TIERS[forced]) return forced
+  const gpu = gpuName().toLowerCase()
   const coarse = window.matchMedia('(pointer: coarse)').matches
   const cores = navigator.hardwareConcurrency || 4
-  if (coarse) return cores >= 8 ? 'mid' : 'low'
+  const memory = navigator.deviceMemory || 8 // GB (Chrome only; capped at 8)
+  if (/swiftshader|llvmpipe|softpipe|software|basic render/.test(gpu)) return 'minimal'
+  if (coarse) {
+    // Phones and tablets: flagship chips get mid, everything else low.
+    if (/apple gpu|adreno \(tm\) (7[3-9]\d|8\d\d)|mali-g7[1-9]|immortalis/.test(gpu) && memory >= 6) return 'mid'
+    return memory >= 4 && cores >= 8 ? 'low' : 'minimal'
+  }
+  // Desktop discrete GPUs, recent generations first.
+  if (/rtx [2-5]0\d0|rx [6-9]\d{3}|radeon pro w[6-7]|arc a[57]\d\d|arc b\d{3}|apple m\d (pro|max|ultra)/.test(gpu)) return 'ultra'
+  if (/nvidia|geforce|quadro|radeon (rx|pro)|arc a|apple m\d/.test(gpu)) return 'high'
+  if (/intel|uhd|iris|vega|radeon\(tm\) graphics|mali|adreno/.test(gpu)) return memory >= 8 && cores >= 8 ? 'mid' : 'low'
   return cores >= 8 ? 'high' : 'mid'
 }
 
 export const tier = pickTier()
-export const quality = TIERS[tier]
 // Debug switches for tracking down rendering problems, e.g. ?godrays=0&reflection=0.
 const params = new URLSearchParams(window.location.search)
 const off = (name) => params.get(name) === '0'

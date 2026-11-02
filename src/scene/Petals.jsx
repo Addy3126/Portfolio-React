@@ -5,8 +5,8 @@ import { fogGLSL } from './glsl'
 import { color, hideInReflection, shared } from './world'
 
 // Floating flowers live in a box that drifts toward the sun and wraps around.
-const BOX_MIN = [-36, 0.15, -70]
-const BOX_SIZE = [72, 16, 82]
+export const BOX_MIN = [-36, 0.15, -70]
+export const BOX_SIZE = [72, 16, 82]
 
 const vertex = /* glsl */ `
 attribute float part;

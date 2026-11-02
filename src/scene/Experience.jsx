@@ -1,13 +1,13 @@
 import { useMemo, useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
-import { autoQualityEnabled, debug, grassEnabled, settingsFor } from '../quality'
+import { autoQualityEnabled, debug, grassEnabled, settingsFor, tier as startTier } from '../quality'
 import CameraRig from './CameraRig'
 import CursorField from './CursorField'
 import Effects from './Effects'
 import FieldFlowers from './FieldFlowers'
 import Grass from './Grass'
 import Ground from './Ground'
-import { AutoQuality, FrameLimiter } from './Perf'
+import { Adaptive, FrameLimiter } from './Perf'
 import Petals from './Petals'
 import Piano from './Piano'
 import PianoShadow from './PianoShadow'
@@ -44,8 +44,8 @@ function Clock({ onReady }) {
 }
 
 export default function Experience({ hovered, selected, onHover, onSelect, onReady }) {
-  const [level, setLevel] = useState(0)
-  const q = useMemo(() => settingsFor(level), [level])
+  const [tier, setTier] = useState(startTier)
+  const q = useMemo(() => settingsFor(tier), [tier])
   return (
     <Canvas
       className="scene"
@@ -56,7 +56,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       onPointerMissed={() => onSelect(null)}
     >
       {debug.fps > 0 && <FrameLimiter fps={debug.fps} />}
-      {autoQualityEnabled && debug.fps > 0 && <AutoQuality level={level} onLevel={setLevel} fps={debug.fps} />}
+      {autoQualityEnabled && debug.fps > 0 && <Adaptive tier={tier} onTier={setTier} startTier={startTier} baseDpr={q.dpr[1]} />}
       <Clock onReady={onReady} />
       {statsOn && <Stats />}
       <CameraRig />

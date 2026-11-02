@@ -4,7 +4,20 @@ import Overlay from './overlay/Overlay'
 import { SECTIONS, motion } from './store'
 import { hasWebGL, reducedMotion } from './quality'
 
-const Experience = lazy(() => import('./scene/Experience'))
+// Renderer: the WebGPU scene where the browser has WebGPU, the WebGL scene otherwise (and if
+// WebGPU fails to start or its device is lost). ?renderer=webgl / ?renderer=webgpu force one.
+const ExperienceGPU = lazy(() => import('./gpu/ExperienceGPU'))
+const ExperienceGL = lazy(() => import('./scene/Experience'))
+const forced = new URLSearchParams(window.location.search).get('renderer')
+async function pickRenderer() {
+  if (forced === 'webgl' || forced === 'webgpu') return forced
+  try {
+    const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' })
+    return adapter ? 'webgpu' : 'webgl'
+  } catch {
+    return 'webgl'
+  }
+}
 const webgl = hasWebGL()
 
 export default function App() {
@@ -12,6 +25,11 @@ export default function App() {
   const [hovered, setHovered] = useState(null)
   const [selected, setSelected] = useState(null)
   const lenis = useRef(null)
+  const [renderer, setRenderer] = useState(null)
+  useEffect(() => {
+    if (webgl) pickRenderer().then(setRenderer)
+  }, [])
+  const Experience = renderer === 'webgpu' ? ExperienceGPU : ExperienceGL
 
   useEffect(() => {
     const l = new Lenis({ lerp: reducedMotion ? 1 : 0.075, wheelMultiplier: 0.9 })
@@ -60,13 +78,16 @@ export default function App() {
     <>
       {webgl ? (
         <Suspense fallback={null}>
-          <Experience
-            hovered={hovered}
-            selected={selected}
-            onHover={setHovered}
-            onSelect={setSelected}
-            onReady={() => setReady(true)}
-          />
+          {renderer && (
+            <Experience
+              hovered={hovered}
+              selected={selected}
+              onHover={setHovered}
+              onSelect={setSelected}
+              onReady={() => setReady(true)}
+              onFail={() => setRenderer('webgl')}
+            />
+          )}
         </Suspense>
       ) : (
         <div className="scene fallback" role="img" aria-label="Twilight field with an empty grand piano" />

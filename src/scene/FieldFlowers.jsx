@@ -108,7 +108,7 @@ void main(){
 `
 
 // Thin open cylinder, y from 0 to 1, unit radius.
-function stemGeometry(sides = 4, rings = 6) {
+export function stemGeometry(sides = 4, rings = 6) {
   const pos = []
   const index = []
   for (let i = 0; i <= rings; i++) {
@@ -138,7 +138,7 @@ const blocked = (x, z) =>
   Math.hypot(x + 1.5, z - 10.8) < 1.8 ||
   z > 7.2
 
-function scatter(rand) {
+export function scatter(rand) {
   const items = []
   const addClusters = (clusters, perMin, perMax, kind) => {
     for (let c = 0; c < clusters; c++) {
@@ -215,7 +215,7 @@ function scatter(rand) {
   return items
 }
 
-function seeded(seed) {
+export function seeded(seed) {
   let s = seed
   return () => {
     s = (s * 16807) % 2147483647

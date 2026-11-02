@@ -152,9 +152,17 @@ void main(){
 }
 `
 
-export default function Plateau() {
-  const { meshes } = useMemo(() => {
-    const mat = rockMaterial()
+function sandMaterial() {
+  return new THREE.ShaderMaterial({
+    vertexShader: sandVertex,
+    fragmentShader: sandFragment,
+    uniforms: { ...shared, cSandP: { value: color('#8d84bc') }, cWetP: { value: color('#3a3c80') }, cSkyP: { value: color('#9a92dc') } },
+  })
+}
+
+// All plateau meshes (shared with the WebGPU path, which passes its own materials).
+export function plateauMeshes(mat, sandMat) {
+  {
     const list = []
     const culled = (g) => {
       const out = cullHidden(g)
@@ -168,14 +176,7 @@ export default function Plateau() {
     })
 
     // Sand apron in front of the lowest layer.
-    const sand = new THREE.Mesh(
-      culled(extrudeXZ(offset(layerOutlines[0], -3), -0.7, 0.08)),
-      new THREE.ShaderMaterial({
-        vertexShader: sandVertex,
-        fragmentShader: sandFragment,
-        uniforms: { ...shared, cSandP: { value: color('#8d84bc') }, cWetP: { value: color('#3a3c80') }, cSkyP: { value: color('#9a92dc') } },
-      }),
-    )
+    const sand = new THREE.Mesh(culled(extrudeXZ(offset(layerOutlines[0], -3), -0.7, 0.08)), sandMat)
     list.push(sand)
 
     // Taller weathered masses further back give the plateau its big silhouette.
@@ -256,9 +257,12 @@ export default function Plateau() {
       im.computeBoundingSphere()
       list.push(im)
     }
-    return { meshes: list }
-  }, [])
+    return list
+  }
+}
 
+export default function Plateau() {
+  const meshes = useMemo(() => plateauMeshes(rockMaterial(), sandMaterial()), [])
   return (
     <group>
       {meshes.map((m, i) => (

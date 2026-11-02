@@ -165,7 +165,7 @@ function bakeUniforms() {
   }
 }
 
-const CUBE_SIZE = tier === 'low' ? 512 : 1024
+const CUBE_SIZE = tier === 'low' || tier === 'minimal' ? 512 : 1024
 
 export default function Sky() {
   const mesh = useRef()
