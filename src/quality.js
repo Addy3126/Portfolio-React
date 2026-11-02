@@ -3,11 +3,11 @@
 // render resolution first, then the tier, down when frames run late and back up when there
 // is steady headroom. ?quality=minimal|low|mid|high|ultra pins the starting tier.
 const TIERS = {
-  minimal: { grassDensity: 44, grassHi: 0, grassLo: 14, effects: 'basic', petals: 140, dpr: [0.75, 0.75], reflection: 0 },
-  low: { grassDensity: 80, grassHi: 0, grassLo: 20, effects: 'basic', petals: 320, dpr: [1, 1], reflection: 0 },
-  mid: { grassDensity: 160, grassHi: 8, grassLo: 24, effects: 'full', petals: 800, dpr: [1, 1.25], reflection: 0.35 },
-  high: { grassDensity: 280, grassHi: 10, grassLo: 28, effects: 'full', petals: 1500, dpr: [1, 1.25], reflection: 0.5 },
-  ultra: { grassDensity: 380, grassHi: 13, grassLo: 34, effects: 'full', petals: 2000, dpr: [1, 1.5], reflection: 0.6 },
+  minimal: { grassDensity: 53, grassHi: 0, grassLo: 14, effects: 'basic', petals: 140, dpr: [0.75, 0.75], reflection: 0 },
+  low: { grassDensity: 96, grassHi: 0, grassLo: 20, effects: 'basic', petals: 320, dpr: [1, 1], reflection: 0 },
+  mid: { grassDensity: 192, grassHi: 8, grassLo: 24, effects: 'full', petals: 800, dpr: [1, 1.25], reflection: 0.35 },
+  high: { grassDensity: 336, grassHi: 10, grassLo: 28, effects: 'full', petals: 1500, dpr: [1, 1.25], reflection: 0.5 },
+  ultra: { grassDensity: 456, grassHi: 13, grassLo: 34, effects: 'full', petals: 2000, dpr: [1, 1.5], reflection: 0.6 },
 }
 export const TIER_ORDER = ['minimal', 'low', 'mid', 'high', 'ultra']
 
