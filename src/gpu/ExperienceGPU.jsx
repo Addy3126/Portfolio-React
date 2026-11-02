@@ -141,7 +141,7 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       <RuinsGPU hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano captureEnv={captureEnvGPU} />
 
-      <EffectsGPU godRays={q.godRays && debug.godRays} gradeOn={debug.grade} ao={q.ao && debug.ao} />
+      <EffectsGPU godRays={q.godRays && debug.godRays} gradeOn={debug.grade} ao={q.ao && debug.ao} aoFull={tier === 'ultra'} />
     </Canvas>
   )
 }

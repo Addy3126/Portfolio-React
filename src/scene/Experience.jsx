@@ -53,6 +53,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       dpr={q.dpr}
       camera={{ fov: 42, near: 0.1, far: 3000, position: [0, 1, 9] }}
       gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }}
+      onCreated={() => (window.__backend = 'webgl')}
       onPointerMissed={() => onSelect(null)}
     >
       {debug.fps > 0 && <FrameLimiter fps={debug.fps} />}

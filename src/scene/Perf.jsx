@@ -27,13 +27,15 @@ export function FrameLimiter({ fps = FPS_CAP }) {
 
 // Adaptive quality. Watches the real interval between rendered frames (the scene renders at
 // FPS_CAP, so anything slower means the GPU can't keep up) over two-second windows:
-// - late frames: lower the render resolution in steps (to 70%), then drop a tier;
+// - late frames: lower the render resolution in steps (to 85% or 70%), then drop a tier;
 // - on time for a while: raise the resolution back, then try the next tier up (at most one
 //   above the starting guess). A tier that proves too slow is never tried again, so it
 //   settles instead of oscillating.
 const BUDGET = 1000 / FPS_CAP
 const STEP = 0.15
-const MIN_SCALE = 0.7
+// On standard-DPI screens a lower render resolution shows as blur, so there it only drops to
+// 85% before the tier goes down; high-DPI screens can go to 70% unnoticed.
+const minScale = (baseDpr) => (Math.min(window.devicePixelRatio, baseDpr) > 1.2 ? 0.7 : 0.85)
 export function Adaptive({ tier, onTier, startTier, baseDpr }) {
   const setDpr = useThree((s) => s.setDpr)
   const s = useRef(null)
@@ -71,7 +73,7 @@ export function Adaptive({ tier, onTier, startTier, baseDpr }) {
         st.failed.add(st.probe)
         st.probe = null
         onTier(TIER_ORDER[idx - 1])
-      } else if (st.scale > MIN_SCALE + 1e-3) apply(Math.max(MIN_SCALE, st.scale - STEP))
+      } else if (st.scale > minScale(baseDpr) + 1e-3) apply(Math.max(minScale(baseDpr), st.scale - STEP))
       else if (idx > 0) {
         apply(1)
         onTier(TIER_ORDER[idx - 1])
