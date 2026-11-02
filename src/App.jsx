@@ -9,6 +9,20 @@ import { hasWebGL, reducedMotion } from './quality'
 const ExperienceGPU = lazy(() => import('./gpu/ExperienceGPU'))
 const ExperienceGL = lazy(() => import('./scene/Experience'))
 const forced = new URLSearchParams(window.location.search).get('renderer')
+const hud = new URLSearchParams(window.location.search).get('hud') === '1'
+
+// ?hud=1: a small readout of the renderer, quality tier, render scale and frame time.
+function Hud() {
+  const [text, setText] = useState('')
+  useEffect(() => {
+    const id = setInterval(() => {
+      const a = window.__adaptive
+      setText(`${window.__backend ?? 'webgl'} · ${a ? `${a.tier} · ${Math.round(a.scale * 100)}% · ${a.avg} ms` : 'measuring…'}`)
+    }, 500)
+    return () => clearInterval(id)
+  }, [])
+  return <div style={{ position: 'fixed', left: 12, bottom: 12, zIndex: 50, font: '12px monospace', color: '#fff', background: 'rgba(0,0,0,.55)', padding: '4px 8px', borderRadius: 4, pointerEvents: 'none' }}>{text}</div>
+}
 async function pickRenderer() {
   if (forced === 'webgl' || forced === 'webgpu') return forced
   try {
@@ -92,6 +106,7 @@ export default function App() {
       ) : (
         <div className="scene fallback" role="img" aria-label="Twilight field with an empty grand piano" />
       )}
+      {hud && <Hud />}
       <div className={`loader ${ready ? 'done' : ''}`} aria-hidden={ready}>
         <span>Tuning the piano</span>
       </div>

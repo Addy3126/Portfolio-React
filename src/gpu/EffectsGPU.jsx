@@ -33,6 +33,9 @@ import {
   vec2,
   vec3,
   vec4,
+  abs,
+  exp,
+  perspectiveDepthToViewZ,
 } from 'three/tsl'
 import { ao as gtao } from 'three/examples/jsm/tsl/display/GTAONode.js'
 import { smaa } from 'three/examples/jsm/tsl/display/SMAANode.js'
@@ -58,7 +61,7 @@ const grade = Fn(([c0]) => {
   return clamp(mix(vec3(l2), c, float(1.0).add(float(1.0).sub(sat).mul(0.18))), 0.0, 1.0)
 })
 
-export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false }) {
+export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false, aoFull = false }) {
   const { gl, scene, camera, size } = useThree()
 
   const { pipeline, sunUV, sunOn } = useMemo(() => {
@@ -102,20 +105,39 @@ export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false 
       scenePass.setMRT(mrt({ output, normal: packNormalToRGB(normalView) }))
       const normalTex = scenePass.getTextureNode('normal')
       const sceneNormal = sample((p) => unpackRGBToNormal(normalTex.sample(p)))
-      // Ground-truth AO at half resolution (normals rebuilt from depth): contact shadows
-      // where things meet, as N8AO on the WebGL path (radius 1.2 m, tinted, strength 2.2).
-      const aoPass = gtao(scenePass.getTextureNode('depth'), sceneNormal, camera)
-      aoPass.resolutionScale = 0.5
+      // Ground-truth AO: contact shadows where things meet, as N8AO on the WebGL path. Full
+      // resolution on the ultra tier, half below it.
+      const depthTex = scenePass.getTextureNode('depth')
+      const aoPass = gtao(depthTex, sceneNormal, camera)
+      aoPass.resolutionScale = aoFull ? 1 : 0.5
       aoPass.radius.value = 0.9
       aoPass.distanceFallOff.value = 0.6
       aoPass.samples.value = 12
-      // Soften the half-resolution result (5x5 taps) so it doesn't speckle smooth surfaces,
-      // and fade it out with distance: rebuilt normals at grazing angles far away (the sea)
-      // would otherwise read as occlusion.
+      // Edge-aware smoothing (joint bilateral): each tap counts only if it lies at about the
+      // same depth as this pixel, so AO never bleeds across edges. A plain blur smeared the
+      // shadow of the blades behind onto each grass blade, which read as blurry grass.
+      // AO fades out with distance (grazing far surfaces like the sea read as occluded).
       const aoTex = aoPass.getTextureNode()
-      let sum = float(0.0)
-      for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) sum = sum.add(aoTex.sample(uv().add(vec2(i, j).mul(texel).mul(2.0))).r)
-      const occ = mix(sum.div(25.0), float(1.0), smoothstep(-25.0, -60.0, viewZ))
+      // The scene camera's clip planes (cameraNear/cameraFar here would be the full-screen
+      // quad's camera).
+      const near = uniform(camera.near)
+      const far = uniform(camera.far)
+      const zAt = (p) => perspectiveDepthToViewZ(depthTex.sample(p).x, near, far)
+      const occ = Fn(() => {
+        const zc = zAt(uv()).toVar()
+        const tol = abs(zc).mul(0.03).add(0.02).toVar()
+        const sum = float(0.0).toVar()
+        const wsum = float(0.0).toVar()
+        for (let i = -2; i <= 2; i++) {
+          for (let j = -2; j <= 2; j++) {
+            const p = uv().add(vec2(i, j).mul(texel).mul(aoFull ? 1.0 : 1.5))
+            const w = exp(abs(zAt(p).sub(zc)).div(tol).negate()).mul(1.0 / (1 + i * i + j * j))
+            sum.addAssign(aoTex.sample(p).r.mul(w))
+            wsum.addAssign(w)
+          }
+        }
+        return mix(sum.div(max(wsum, 1e-4)), float(1.0), smoothstep(-25.0, -60.0, zc))
+      })()
       hdr = hdr.mul(mix(vec3(0.05, 0.045, 0.16), vec3(1.0), pow(clamp(occ, 0.0, 1.0), 1.15)))
     }
     if (godRays) {
@@ -171,7 +193,7 @@ export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false 
     pipeline.outputNode = smaa(out)
     pipeline._texel = texel
     return { pipeline, sunUV, sunOn }
-  }, [gl, scene, camera, godRays, gradeOn, ao])
+  }, [gl, scene, camera, godRays, gradeOn, ao, aoFull])
 
   useEffect(() => {
     pipeline._texel.value.set(1 / (size.width * gl.getPixelRatio()), 1 / (size.height * gl.getPixelRatio()))
