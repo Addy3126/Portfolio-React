@@ -202,7 +202,8 @@ function seaGeometry(cols = 220, rows = 200) {
   return g
 }
 
-export default function Sea({ reflection = 0 }) {
+// reflectAll: grass and flowers appear in the reflection too (higher tiers).
+export default function Sea({ reflection = 0, reflectAll = false }) {
   const { size, viewport } = useThree()
   const scale = reflection
 
@@ -215,9 +216,9 @@ export default function Sea({ reflection = 0 }) {
       // Skip grass and flowers while rendering the mirrored view.
       const render = m.onBeforeRender
       m.onBeforeRender = function (...args) {
-        hideInReflection.forEach((o) => (o.visible = false))
+        if (!reflectAll) hideInReflection.forEach((o) => (o.visible = false))
         render.apply(this, args)
-        hideInReflection.forEach((o) => (o.visible = true))
+        if (!reflectAll) hideInReflection.forEach((o) => (o.visible = true))
       }
     } else {
       m = new THREE.Mesh(
@@ -231,7 +232,7 @@ export default function Sea({ reflection = 0 }) {
     m.position.set(0, SEA_LEVEL, 0)
     m.frustumCulled = false
     return m
-  }, [scale])
+  }, [scale, reflectAll])
 
   // Keep the reflection at a fraction of the screen resolution.
   useEffect(() => {

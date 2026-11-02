@@ -20,6 +20,7 @@ export function settingsFor(tierName) {
   q.godRays = q.effects === 'full'
   q.ao = q.effects === 'full'
   q.contact = tierName === 'high' || tierName === 'ultra'
+  q.reflectAll = tierName === 'high' || tierName === 'ultra'
   return q
 }
 

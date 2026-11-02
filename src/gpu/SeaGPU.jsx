@@ -161,7 +161,8 @@ function seaMaterial(refl) {
   return m
 }
 
-export default function SeaGPU({ reflection = 0 }) {
+// reflectAll: grass and flowers appear in the reflection too (higher tiers).
+export default function SeaGPU({ reflection = 0, reflectAll = false }) {
   const { mesh, refl } = useMemo(() => {
     const refl = reflection > 0 ? reflector({ resolutionScale: reflection, bounces: false }) : null
 
@@ -180,14 +181,15 @@ export default function SeaGPU({ reflection = 0 }) {
       const get = base.getVirtualCamera.bind(base)
       base.getVirtualCamera = (cam) => {
         const v = get(cam)
-        v.layers.disable(REFLECTION_HIDDEN)
+        if (reflectAll) v.layers.enable(REFLECTION_HIDDEN)
+        else v.layers.disable(REFLECTION_HIDDEN)
         return v
       }
     }
     seaSwap.mesh = mesh
     seaSwap.plain = plain
     return { mesh, refl }
-  }, [reflection])
+  }, [reflection, reflectAll])
 
   useEffect(() => () => mesh.material.dispose(), [mesh])
   return <primitive object={mesh} />

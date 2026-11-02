@@ -72,7 +72,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       <pointLight position={[-1.45, 0.35, 4.3]} color="#6f9bff" intensity={1.4} distance={4} decay={2} />
 
       <Sky />
-      <Sea reflection={debug.reflection ? q.reflection : 0} />
+      <Sea reflection={debug.reflection ? q.reflection : 0} reflectAll={q.reflectAll} />
       <Ground />
       {grassEnabled && <Grass density={q.grassDensity} hiDist={q.grassHi} loDist={q.grassLo} />}
       {grassEnabled && <FieldFlowers />}

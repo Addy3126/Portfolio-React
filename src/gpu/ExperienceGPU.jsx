@@ -133,7 +133,7 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       <pointLight position={[-1.45, 0.35, 4.3]} color="#6f9bff" intensity={1.4} distance={4} decay={2} />
 
       <SkyGPU />
-      <SeaGPU reflection={debug.reflection ? q.reflection : 0} />
+      <SeaGPU reflection={debug.reflection ? q.reflection : 0} reflectAll={q.reflectAll} />
       <GroundGPU />
       {grassEnabled && <GrassGPU density={q.grassDensity} hiDist={q.grassHi} loDist={q.grassLo} />}
       {grassEnabled && <FieldFlowersGPU />}
