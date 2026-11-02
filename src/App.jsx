@@ -4,7 +4,9 @@ import Overlay from './overlay/Overlay'
 import { SECTIONS, motion } from './store'
 import { hasWebGL, reducedMotion } from './quality'
 
-const Experience = lazy(() => import('./scene/Experience'))
+// ?renderer=webgpu tries the WebGPU path (in progress); WebGL stays the default for now.
+const useGPU = new URLSearchParams(window.location.search).get('renderer') === 'webgpu'
+const Experience = lazy(() => (useGPU ? import('./gpu/ExperienceGPU') : import('./scene/Experience')))
 const webgl = hasWebGL()
 
 export default function App() {
