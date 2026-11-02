@@ -7,6 +7,7 @@ import CursorField from '../scene/CursorField'
 import { FrameLimiter } from '../scene/Perf'
 import { SUN_DIR, shared } from '../scene/world'
 import EffectsGPU from './EffectsGPU'
+import { FieldFlowersGPU, PetalsGPU } from './FlowersGPU'
 import GrassGPU from './GrassGPU'
 import GroundGPU from './GroundGPU'
 import SeaGPU, { REFLECTION_HIDDEN } from './SeaGPU'
@@ -66,6 +67,8 @@ export default function ExperienceGPU({ onSelect, onReady }) {
       <SeaGPU reflection={debug.reflection ? q.reflection : 0} />
       <GroundGPU />
       {grassEnabled && <GrassGPU density={q.grassDensity} hiDist={q.grassHi} loDist={q.grassLo} />}
+      {grassEnabled && <FieldFlowersGPU />}
+      {debug.flowers && <PetalsGPU count={q.petals} />}
 
       <EffectsGPU godRays={q.godRays && debug.godRays} gradeOn={debug.grade} />
     </Canvas>

@@ -11,7 +11,7 @@ import {
   cross,
   dot,
   float,
-  frontFacing,
+  faceDirection,
   length,
   max,
   mix,
@@ -142,7 +142,7 @@ function makeMaterial(hi) {
     const toP = W.sub(cameraPosition)
     const dist = length(toP)
     const V = toP.div(dist)
-    const N = normalize(vNormal.add(vec3(0, 1e-5, 0))).mul(frontFacing.select(1.0, -1.0))
+    const N = normalize(vNormal.add(vec3(0, 1e-5, 0))).mul(faceDirection)
     const L = u.sunDir
 
     // Albedo: base to tip, varied per clump and by large patches.
