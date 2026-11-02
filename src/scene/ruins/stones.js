@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { fogGLSL, noise3GLSL, noiseGLSL, shoreGLSL, swashGLSL } from '../glsl'
+import { surfaceUniforms, triplanarGLSL } from '../surfaces'
 import { color, shared } from '../world'
 import { fbm3, hash3 } from './noise3'
 
@@ -100,6 +101,7 @@ void main(){
 const fragment = /* glsl */ `
 uniform float uTime;
 uniform float uMotion;
+uniform sampler2D tStoneS, tStoneN;
 uniform vec3 cGranite, cBasalt, cQuartz, cSandst, cSandDust, cSkyS, cGroundS, cSunS, cFoamS, cSkyRefl;
 varying vec3 vWorld;
 varying vec3 vNormalW;
@@ -113,6 +115,7 @@ ${noise3GLSL}
 ${fogGLSL}
 ${shoreGLSL}
 ${swashGLSL}
+${triplanarGLSL}
 
 // An octave of feature size s (metres) stays visible until it shrinks below ~1.5 px.
 float vis(float s, float dist){ return 1.0 - smoothstep(0.6, 1.0, dist / (s * 420.0)); }
@@ -156,34 +159,13 @@ void main(){
   float bandv = sin(vObj.y * 90.0 + vnoise3(P * 20.0) * 4.0) * 0.5 + 0.5;
   albedo *= 1.0 - bands * 0.3 * bandv * vis(0.012, dist);
 
-  // Fine relief: perturb the normal (pits and grain), fading with distance.
-  // Rough surface: lumps (~3 cm), bumps (~1 cm) and pits (~3 mm), each fading below a pixel.
-  float rL = vis(0.03, dist), rC = vis(0.012, dist), rF = vis(0.004, dist);
-  float rough = 0.5;
-  if (rL > 0.01) {
-    vec3 Q = P * 14.0;
-    float e = 0.25;
-    float f0 = fbm3g(Q);
-    vec3 grad = vec3(fbm3g(Q + vec3(e, 0.0, 0.0)) - f0, fbm3g(Q + vec3(0.0, e, 0.0)) - f0, fbm3g(Q + vec3(0.0, 0.0, e)) - f0) / e;
-    N = normalize(N - (grad - N * dot(grad, N)) * 0.28 * rL);
-    rough = f0;
-  }
-  if (rC > 0.01) {
-    vec3 Q = P * 40.0;
-    float e = 0.3;
-    float f0 = fbm3g(Q);
-    vec3 grad = vec3(fbm3g(Q + vec3(e, 0.0, 0.0)) - f0, fbm3g(Q + vec3(0.0, e, 0.0)) - f0, fbm3g(Q + vec3(0.0, 0.0, e)) - f0) / e;
-    N = normalize(N - (grad - N * dot(grad, N)) * 0.35 * rC);
-  }
-  if (rF > 0.01) {
-    vec3 Q = P * 150.0;
-    float e = 0.35;
-    float f0 = vnoise3(Q);
-    vec3 grad = vec3(vnoise3(Q + vec3(e, 0.0, 0.0)) - f0, vnoise3(Q + vec3(0.0, e, 0.0)) - f0, vnoise3(Q + vec3(0.0, 0.0, e)) - f0) / e;
-    N = normalize(N - (grad - N * dot(grad, N)) * 0.2 * rF);
-    // Pits read darker.
-    albedo *= 1.0 - 0.35 * (1.0 - smoothstep(0.15, 0.3, vnoise3(Q * 0.7 + 9.0))) * rF;
-  }
+  // Scanned rock surface in the stone's own space (it sticks to the stone): normals,
+  // grain, and pits from the scan's cavities, fading as they shrink below a pixel.
+  vec3 sInfo;
+  N = triplanar(tStoneS, tStoneN, P, N, 3.5, vis(0.01, dist) * 1.3, sInfo);
+  albedo *= mix(1.0, sInfo.r * 1.2 + 0.4, vis(0.01, dist));
+  albedo *= mix(1.0, sInfo.b * 0.7 + 0.3, vis(0.006, dist));
+  float rough = 1.0 - sInfo.g;
 
   // Wetness from the swash (and anything standing in the sea).
   float L = landDist(vWorld.xz);
@@ -233,6 +215,7 @@ export function stoneMaterial() {
     fragmentShader: fragment,
     uniforms: {
       ...shared,
+      ...surfaceUniforms('rock_face_03', 'tStone'),
       // Real stone colours, pulled slightly toward the twilight palette.
       cGranite: { value: color('#8a7f8e') },
       cBasalt: { value: color('#2a2934') },

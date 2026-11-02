@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { fogGLSL, noise3GLSL, noiseGLSL, shoreGLSL } from '../glsl'
+import { surfaceUniforms, triplanarGLSL } from '../surfaces'
 import { color, shared } from '../world'
 import { fbm3, hash3, ridged3 } from './noise3'
 
@@ -134,6 +135,7 @@ void main(){
 const fragment = /* glsl */ `
 uniform float uTime;
 uniform float uMotion;
+uniform sampler2D tRockS, tRockN, tStrataS, tStrataN;
 uniform vec3 cRock, cRock2, cRockWarm, cFrostR, cLichen, cWet, cSalt, cFoamR, cSkyR, cGroundR, cSunR;
 varying vec3 vWorld;
 varying vec3 vNormalW;
@@ -143,6 +145,7 @@ ${noiseGLSL}
 ${noise3GLSL}
 ${fogGLSL}
 ${shoreGLSL}
+${triplanarGLSL}
 void main(){
   vec3 toP = vWorld - cameraPosition;
   float dist = length(toP);
@@ -151,15 +154,6 @@ void main(){
   float h = vWorld.y;
   float detail = 1.0 - smoothstep(40.0, 220.0, dist);
 
-  // Surface relief: bump the normal with 3D noise (no stretching on steep faces).
-  vec3 P = vWorld * 1.6;
-  if (detail > 0.01) {
-    float e = 0.12;
-    float f0 = fbm3g(P);
-    vec3 grad = vec3(fbm3g(P + vec3(e, 0.0, 0.0)) - f0, fbm3g(P + vec3(0.0, e, 0.0)) - f0, fbm3g(P + vec3(0.0, 0.0, e)) - f0) / e;
-    grad += (vec3(vnoise3(P * 6.0 + 1.0), vnoise3(P * 6.0 + 5.0), vnoise3(P * 6.0 + 9.0)) - 0.5) * 1.2; // fine grain
-    N = normalize(N - (grad - N * dot(grad, N)) * 0.22 * detail);
-  }
   // Medium-scale relief (bulges, hollows, ledges) that still reads at a distance.
   {
     vec3 Q = vWorld * 0.22;
@@ -169,6 +163,10 @@ void main(){
     grad.y *= 1.6; // favour horizontal ledges, like bedding planes
     N = normalize(N - (grad - N * dot(grad, N)) * 0.32);
   }
+  // Photo-scanned rock up close, layered strata on the big masses (triplanar).
+  vec3 fineInfo, strataInfo;
+  N = triplanar(tRockS, tRockN, vWorld, N, 0.45, detail * 1.1, fineInfo);
+  N = triplanar(tStrataS, tStrataN, vWorld, N, 0.07, 0.8, strataInfo);
 
   // Base colour: cool grey stone with large warm/cool variation and strata bands.
   float big = fbm3g(vWorld * 0.06);
@@ -176,9 +174,9 @@ void main(){
   albedo = mix(albedo, cRockWarm, smoothstep(0.55, 0.8, fbm3g(vWorld * 0.13 + 7.0)) * 0.5);
   float band = vnoise(vec2(h * 1.8, (vWorld.x + vWorld.z) * 0.04));
   albedo *= 0.88 + 0.24 * band;
-  // Grain: mineral speckle like granite.
-  float speck = vnoise3(vWorld * 9.0);
-  albedo *= 0.86 + 0.28 * smoothstep(0.2, 0.8, speck) * detail + (1.0 - detail) * 0.14;
+  // Scanned luminance: mineral grain up close, strata colour further out.
+  albedo *= mix(1.0, fineInfo.r * 1.1 + 0.45, detail);
+  albedo *= strataInfo.r * 0.6 + 0.7;
 
   // Thin dark cracks (joints), more visible than grain at a distance.
   float j = abs(vnoise3(vWorld * vec3(0.35, 0.9, 0.35)) - 0.5);
@@ -203,12 +201,12 @@ void main(){
   albedo = mix(albedo, cSalt, salt * 0.3);
 
   // Lighting: twilight sky, wrapped low sun, rim when backlit, a wet sheen near the water.
-  float ao = 1.0 - 0.45 * smoothstep(0.0, 0.9, vCurv);
+  float ao = (1.0 - 0.45 * smoothstep(0.0, 0.9, vCurv)) * mix(1.0, fineInfo.b, detail * 0.8);
   vec3 ambient = mix(cGroundR, cSkyR, N.y * 0.5 + 0.5) * ao;
   float wrap = max((dot(N, uSunDir) + 0.25) / 1.25, 0.0);
   float rim = pow(max(1.0 - abs(dot(N, -V)), 0.0), 3.0) * pow(max(dot(V, uSunDir), 0.0), 3.0);
   vec3 H = normalize(uSunDir - V);
-  float sheen = pow(max(dot(N, H), 0.0), 40.0) * (0.08 + 0.6 * wet);
+  float sheen = pow(max(dot(N, H), 0.0), mix(60.0, 20.0, fineInfo.g)) * (0.08 + 0.6 * wet);
   vec3 col = albedo * (ambient + cSunR * wrap * 0.55) + cSunR * (rim * 0.3 + sheen);
 
   // Foam lapping where the rock meets the water.
@@ -227,6 +225,8 @@ export function rockMaterial() {
     fragmentShader: fragment,
     uniforms: {
       ...shared,
+      ...surfaceUniforms('rock_face_03', 'tRock'),
+      ...surfaceUniforms('cliff_side', 'tStrata'),
       cRock: { value: color('#2f2c48') },
       cRock2: { value: color('#45415f') },
       cRockWarm: { value: color('#4a3a52') },
