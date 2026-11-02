@@ -391,7 +391,21 @@ function buildPiano(d, mats) {
   return parts
 }
 
-export default function Piano() {
+// Cube capture of the surroundings, prefiltered for the lacquer (WebGL). The WebGPU path
+// passes its own (node materials prefilter cube maps themselves).
+function captureEnvGL(gl, scene, at) {
+  const rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType })
+  const cam = new THREE.CubeCamera(0.3, 3000, rt)
+  cam.position.copy(at)
+  cam.update(gl, scene)
+  const pmrem = new THREE.PMREMGenerator(gl)
+  const env = pmrem.fromCubemap(rt.texture)
+  pmrem.dispose()
+  rt.dispose()
+  return env
+}
+
+export default function Piano({ captureEnv }) {
   const mats = useMemo(() => pianoMaterials(design), [])
   const parts = useMemo(() => {
     const list = buildPiano(design, mats)
@@ -423,16 +437,10 @@ export default function Piano() {
     const c = capture.current
     if (c.done || !debug.envCapture || ++c.frame < 8) return // after the shadow map and grass have settled
     c.done = true
-    const rt = new THREE.WebGLCubeRenderTarget(256, { type: THREE.HalfFloatType })
-    const cam = new THREE.CubeCamera(0.3, 3000, rt)
-    cam.position.copy(PIANO_CENTRE).add(new THREE.Vector3(0, 0.5, 0))
+    const at = PIANO_CENTRE.clone().add(new THREE.Vector3(0, 0.5, 0))
     group.current.visible = false
-    cam.update(gl, scene)
+    const env = (captureEnv ?? captureEnvGL)(gl, scene, at)
     group.current.visible = true
-    const pmrem = new THREE.PMREMGenerator(gl)
-    const env = pmrem.fromCubemap(rt.texture)
-    pmrem.dispose()
-    rt.dispose()
     for (const m of [mats.lacquer, mats.brass, mats.plate, mats.ebony, mats.steel, mats.bolt]) {
       m.envMap = env.texture
       m.envMapIntensity = m === mats.lacquer ? 1.35 : 1

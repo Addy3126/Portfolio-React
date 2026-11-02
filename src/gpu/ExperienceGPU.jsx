@@ -4,6 +4,7 @@ import * as THREE from 'three/webgpu'
 import { debug, grassEnabled, settingsFor } from '../quality'
 import CameraRig from '../scene/CameraRig'
 import CursorField from '../scene/CursorField'
+import Piano from '../scene/Piano'
 import { FrameLimiter } from '../scene/Perf'
 import { SUN_DIR, shared } from '../scene/world'
 import EffectsGPU from './EffectsGPU'
@@ -11,6 +12,8 @@ import { FieldFlowersGPU, PetalsGPU } from './FlowersGPU'
 import GrassGPU from './GrassGPU'
 import GroundGPU from './GroundGPU'
 import RocksGPU from './RocksGPU'
+import { PlateauGPU, RuinsGPU } from './RuinsGPU'
+import { PianoShadowGPU } from './shadow'
 import SeaGPU, { REFLECTION_HIDDEN } from './SeaGPU'
 import SkyGPU from './SkyGPU'
 import { sync } from './tsl'
@@ -32,6 +35,15 @@ function Clock({ onReady }) {
   return null
 }
 
+// The piano's reflection capture: a cube view of the field and sky from the piano.
+function captureEnvGPU(gl, scene, at) {
+  const rt = new THREE.CubeRenderTarget(256, { type: THREE.HalfFloatType })
+  const cam = new THREE.CubeCamera(0.3, 3000, rt)
+  cam.position.copy(at)
+  cam.update(gl, scene)
+  return rt
+}
+
 async function createRenderer(props) {
   const renderer = new THREE.WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', stencil: false })
   await renderer.init()
@@ -40,7 +52,7 @@ async function createRenderer(props) {
   return renderer
 }
 
-export default function ExperienceGPU({ onSelect, onReady }) {
+export default function ExperienceGPU({ hovered, selected, onHover, onSelect, onReady }) {
   const q = settingsFor(0)
   return (
     <Canvas
@@ -59,10 +71,12 @@ export default function ExperienceGPU({ onSelect, onReady }) {
       <Clock onReady={onReady} />
       <CameraRig />
       <CursorField />
+      {debug.shadow && <PianoShadowGPU />}
 
       <hemisphereLight args={['#8f86c8', '#20255e', 1.2]} />
       <directionalLight position={SUN_DIR.clone().multiplyScalar(100)} color="#f5c8d0" intensity={2.2} />
       <directionalLight position={[-6, 4, 12]} color="#8a8fe0" intensity={0.9} />
+      <pointLight position={[-1.45, 0.35, 4.3]} color="#6f9bff" intensity={1.4} distance={4} decay={2} />
 
       <SkyGPU />
       <SeaGPU reflection={debug.reflection ? q.reflection : 0} />
@@ -71,6 +85,9 @@ export default function ExperienceGPU({ onSelect, onReady }) {
       {grassEnabled && <FieldFlowersGPU />}
       {debug.flowers && <PetalsGPU count={q.petals} />}
       <RocksGPU />
+      <PlateauGPU />
+      <RuinsGPU hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
+      <Piano captureEnv={captureEnvGPU} />
 
       <EffectsGPU godRays={q.godRays && debug.godRays} gradeOn={debug.grade} />
     </Canvas>

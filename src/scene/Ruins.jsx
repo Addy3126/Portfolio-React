@@ -38,7 +38,21 @@ void main(){
   gl_FragColor = vec4(applyFog(uColor, dist, toP / dist), 1.0);
 }
 `
-const DIM = color('#1c2350')
+// WebGL window material; userData.color is what Building animates (the WebGPU path passes
+// its own factory with the same contract).
+function windowMaterial() {
+  const m = new THREE.ShaderMaterial({ vertexShader: windowVertex, fragmentShader: windowFragment, uniforms: { ...shared, uColor: { value: DIM.clone() } } })
+  m.userData.color = m.uniforms.uColor.value
+  return m
+}
+export const DIM = color('#1c2350')
+
+// Fallen slab: a box tagged as wall (aKind 0) for the building shader.
+function slabGeometry(w, h, d) {
+  const g = new THREE.BoxGeometry(w, h, d)
+  g.setAttribute('aKind', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count), 1))
+  return g
+}
 const LIT = new THREE.Color(3.2, 2.2, 2.4)
 const HOVER = new THREE.Color(1.5, 1.1, 1.3)
 
@@ -60,7 +74,7 @@ function windowGeometry(windows) {
   return out
 }
 
-function Building({ spec, index, baseY = 0, state, onHover, onSelect }) {
+function Building({ spec, index, baseY = 0, state, onHover, onSelect, mats, makeWindow }) {
   const built = useMemo(() => {
     const b = buildTower(spec, seeded(1000 + index * 37))
     // Drop faces no camera can see (back walls, undersides, anything under the sea).
@@ -75,13 +89,7 @@ function Building({ spec, index, baseY = 0, state, onHover, onSelect }) {
     return { ...b, geometry }
   }, [spec, index, baseY])
   const interactive = spec.project !== undefined
-  const windowMat = useMemo(
-    () =>
-      interactive
-        ? new THREE.ShaderMaterial({ vertexShader: windowVertex, fragmentShader: windowFragment, uniforms: { ...shared, uColor: { value: DIM.clone() } } })
-        : null,
-    [interactive],
-  )
+  const windowMat = useMemo(() => (interactive ? makeWindow() : null), [interactive, makeWindow])
   const windowGeo = useMemo(() => (interactive ? windowGeometry(built.windows) : null), [interactive, built])
 
   const level = useRef(0)
@@ -90,7 +98,7 @@ function Building({ spec, index, baseY = 0, state, onHover, onSelect }) {
     const target = state === 'selected' ? 1 : state === 'hover' ? 0.6 : 0
     level.current += (target - level.current) * Math.min(1, dt * 5)
     const l = level.current
-    windowMat.uniforms.uColor.value.copy(DIM).lerp(l > 0.6 ? LIT : HOVER, Math.min(1, l / (l > 0.6 ? 1 : 0.6)))
+    windowMat.userData.color.copy(DIM).lerp(l > 0.6 ? LIT : HOVER, Math.min(1, l / (l > 0.6 ? 1 : 0.6)))
   })
 
   const handlers = interactive
@@ -110,13 +118,13 @@ function Building({ spec, index, baseY = 0, state, onHover, onSelect }) {
   const [tz = 0, tx = 0] = spec.tilt || []
   return (
     <group position={[spec.x, baseY - (spec.sunk || 0), spec.z]} rotation={[tx, 0, tz]}>
-      <mesh geometry={built.geometry} material={materials[spec.style] || materials.concrete} {...handlers} />
+      <mesh geometry={built.geometry} material={mats[spec.style] || mats.concrete} {...handlers} />
       {windowGeo && <mesh geometry={windowGeo} material={windowMat} />}
     </group>
   )
 }
 
-export default function Ruins({ hovered, selected, onHover, onSelect }) {
+export default function Ruins({ hovered, selected, onHover, onSelect, mats = materials, makeWindow = windowMaterial }) {
   // Headland buildings stand on the rock; sink them slightly so they read as rooted.
   const headland = useMemo(
     () => HEADLAND_BUILDINGS.map((b) => ({ spec: b, baseY: (headlandTopAt(b.x, b.z) ?? 8) - 0.8 })),
@@ -138,18 +146,18 @@ export default function Ruins({ hovered, selected, onHover, onSelect }) {
           state={t.project === undefined ? 'idle' : selected === t.project ? 'selected' : hovered === t.project ? 'hover' : 'idle'}
           onHover={onHover}
           onSelect={onSelect}
+          mats={mats}
+          makeWindow={makeWindow}
         />
       ))}
       {headland.map((h, i) => (
-        <Building key={`h${i}`} index={100 + i} spec={h.spec} baseY={h.baseY} state="idle" onHover={onHover} onSelect={onSelect} />
+        <Building key={`h${i}`} index={100 + i} spec={h.spec} baseY={h.baseY} state="idle" onHover={onHover} onSelect={onSelect} mats={mats} makeWindow={makeWindow} />
       ))}
       {plateau.map((p, i) => (
-        <Building key={`p${i}`} index={200 + i} spec={p.spec} baseY={p.baseY} state="idle" onHover={onHover} onSelect={onSelect} />
+        <Building key={`p${i}`} index={200 + i} spec={p.spec} baseY={p.baseY} state="idle" onHover={onHover} onSelect={onSelect} mats={mats} makeWindow={makeWindow} />
       ))}
       {slabs.map(([x, z, w, h, d, ry, rz], i) => (
-        <mesh key={`s${i}`} material={materials.concrete} position={[x, h * 0.2, z]} rotation={[0, ry, rz]}>
-          <boxGeometry args={[w, h, d]} />
-        </mesh>
+        <mesh key={`s${i}`} geometry={slabGeometry(w, h, d)} material={mats.concrete} position={[x, h * 0.2, z]} rotation={[0, ry, rz]} />
       ))}
     </group>
   )

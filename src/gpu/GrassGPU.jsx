@@ -28,6 +28,7 @@ import {
 import { FIELD, TILE, bladeTemplate, buildTile, seeded } from '../scene/Grass'
 import { color, palette, shared } from '../scene/world'
 import { REFLECTION_HIDDEN } from './SeaGPU'
+import { pianoShadow } from './shadow'
 import { applyFog, spow, u, vnoise } from './tsl'
 
 // The grass field on the WebGPU path: the same tiles, blades and shading as the WebGL
@@ -155,12 +156,13 @@ function makeMaterial(hi) {
     albedo.assign(mix(albedo.mul(float(1.0).sub(vKind.mul(0.35))), cFrost.mul(0.8), head))
 
     // Lighting: twilight sky, low sun wrapping around blades, light through blades.
+    const sh = pianoShadow(W).toVar()
     const contact = pianoContact(W.xz)
-    const ambient = mix(cGround, cSky, N.y.mul(0.5).add(0.5)).mul(contact)
-    const wrap = max(dot(N, L).add(0.5).div(1.5), 0.0)
-    const through = spow(dot(V, L), 3.0).mul(tt.mul(0.65).add(0.35))
+    const ambient = mix(cGround, cSky, N.y.mul(0.5).add(0.5)).mul(mix(0.55, 1.0, sh)).mul(contact)
+    const wrap = max(dot(N, L).add(0.5).div(1.5), 0.0).mul(sh)
+    const through = spow(dot(V, L), 3.0).mul(tt.mul(0.65).add(0.35)).mul(mix(0.3, 1.0, sh))
     const H = normalize(L.sub(V))
-    const spec = spow(dot(N, H), 12.0).mul(tt)
+    const spec = spow(dot(N, H), 12.0).mul(tt).mul(sh)
 
     const col = albedo
       .mul(ambient.add(cSun.mul(wrap).mul(0.45)))
@@ -174,6 +176,7 @@ function makeMaterial(hi) {
       .mul(float(1.0).sub(vKind.mul(0.6)))
     const frostLit = cFrost.mul(float(0.5).add(ambient.mul(0.7)).add(cSun.mul(wrap.mul(0.3).add(through.mul(1.4)))))
     col.assign(mix(col, frostLit, frost.mul(0.8)))
+    col.mulAssign(mix(0.62, 1.0, sh))
 
     // Ambient occlusion: dark at the roots.
     col.mulAssign(mix(0.22, 1.0, smoothstep(0.0, 0.55, tt)))

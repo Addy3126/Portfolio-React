@@ -121,7 +121,7 @@ export default function EffectsGPU({ godRays = true, gradeOn = true }) {
         { resolutionScale: 0.5 },
       )
       const r = rays.sample(uv()).rgb
-      hdr = hdr.add(r).sub(hdr.mul(r).mul(clamp(hdr, 0.0, 1.0))) // screen blend
+      hdr = hdr.add(r).sub(min(hdr.mul(r), vec3(1.0))) // screen blend, as postprocessing's
       pipeline._aspect = aspect
     }
 
@@ -153,7 +153,7 @@ export default function EffectsGPU({ godRays = true, gradeOn = true }) {
   useFrame(() => {
     // Sun position on screen (the shafts fade out when it is behind the camera).
     tmp.copy(camera.position).addScaledVector(SUN_DIR, 1400).project(camera)
-    sunUV.value.set(tmp.x * 0.5 + 0.5, tmp.y * 0.5 + 0.5)
+    sunUV.value.set(tmp.x * 0.5 + 0.5, 0.5 - tmp.y * 0.5) // screen uv: y down
     sunOn.value = tmp.z < 1 ? 1 : 0
     pipeline.render()
   }, 1)

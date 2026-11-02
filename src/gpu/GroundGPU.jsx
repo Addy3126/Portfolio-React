@@ -3,12 +3,12 @@ import * as THREE from 'three/webgpu'
 import { Fn, If, cameraPosition, clamp, dot, float, length, max, mix, normalize, positionWorld, pow, reflect, sin, smoothstep, step, vec2, vec3 } from 'three/tsl'
 import { cullHidden } from '../scene/visibility'
 import { color, landDist as landDistJS, palette } from '../scene/world'
+import { pianoShadow } from './shadow'
 import { applyFog, foamShadeAt, landDist, mainDist, swash, u, vnoise } from './tsl'
 
 // Ground, as the WebGL ground: field soil, beach and spit sand (ripples, grain, grit), the
 // shore swash (water sheet, foam, wet sand) shared with the sea, seabed darkening, far
-// grass carpet, sun back-light, piano contact darkening and glow.
-// Still to port: the piano's cast shadow (comes with the piano).
+// grass carpet, sun back-light, piano shadow and contact darkening, piano glow.
 const c = (hex) => vec3(...color(hex).toArray())
 
 function groundGeometry() {
@@ -83,7 +83,8 @@ export default function GroundGPU() {
       const back = pow(max(dot(V, u.sunDir), 0.0), 5.0)
       col.addAssign(c(palette.frost).mul(back).mul(0.25).mul(float(1.0).sub(beach)))
 
-      // Contact darkening under the piano and bench.
+      // Piano shadow, and contact darkening under the piano and bench.
+      col.mulAssign(mix(0.45, 1.0, pianoShadow(W)))
       const e = length(xz.sub(vec2(-1.45, 3.7)).div(vec2(1.45, 0.85)))
       const bench = length(xz.sub(vec2(-3.33, 3.7)).div(vec2(0.32, 0.55)))
       col.mulAssign(float(1.0).sub(float(1.0).sub(smoothstep(0.55, 1.35, e)).mul(0.45)).mul(float(1.0).sub(float(1.0).sub(smoothstep(0.6, 1.4, bench)).mul(0.3))))
