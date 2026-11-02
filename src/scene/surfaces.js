@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { tier } from '../quality'
+import { track } from '../textureReady'
 
 // Photo-scanned surface sets for the WebGL scene: the same textures the WebGPU scene uses
 // (see gpu/textures.js and tools/pack-textures.py):
@@ -10,7 +11,9 @@ const loader = new THREE.TextureLoader()
 const cache = new Map()
 
 function load(file) {
-  const t = loader.load(`./textures/${file}`)
+  let done
+  track(new Promise((r) => (done = r)))
+  const t = loader.load(`./textures/${file}`, done, undefined, done)
   t.wrapS = t.wrapT = THREE.RepeatWrapping
   t.colorSpace = THREE.NoColorSpace
   t.anisotropy = 8

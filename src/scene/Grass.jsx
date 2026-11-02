@@ -15,6 +15,13 @@ import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, landDist, mainDist, pa
 // - blades seen edge-on are turned and widened toward the camera (no thin flicker)
 // - clumping, large colour patches, a few taller seed stalks
 
+// Blade proportions: half the original height (the piano is true to scale, ~1 m tall, and
+// the field read as waist-high), narrower blades, and twice the density to keep it full.
+export const GRASS_HEIGHT = 0.5 * debug.grassScale
+export const GRASS_WIDTH = 0.6 * debug.grassWidth
+// Short blades fold into two from one root; the cut-off follows the height scale.
+export const FOLD_BELOW = (0.33 * GRASS_HEIGHT).toFixed(4)
+
 export const TILE = 2.5
 const CLUMP_CELL = 0.9
 // Blade tiles cover the main field; the far spit is painted as carpet by the ground.
@@ -119,7 +126,7 @@ void main(){
   float t;
   #ifdef LOD_HI
     // Short blades fold into two blades from the same root; tall ones use both strips in a row.
-    if (kind < 0.5 && hgt < 0.33) {
+    if (kind < 0.5 && hgt < ${FOLD_BELOW}) {
       t = aT;
       if (part > 0.5) {
         yaw += 2.4 + rnd * 1.2;
@@ -344,7 +351,7 @@ export function buildTile(tx, tz, base, rand) {
       width *= 0.55
     }
     offsets.push(x, 0, z)
-    params.push(yaw, height * debug.grassScale, width, rand())
+    params.push(yaw, height * GRASS_HEIGHT, width * GRASS_WIDTH, rand())
     clumps.push(clump.tone, rel)
     patches.push(fbm(x * 0.09 + 3, z * 0.09 + 3), vnoise(x * 0.16 - 7, z * 0.16 - 7), vnoise(x * 0.05 + 11, z * 0.05 + 11))
     extras.push(0.3 + rand() * 0.7, seed ? 1 : 0)
@@ -398,6 +405,7 @@ export default function Grass({ density = 140, hiDist = 10, loDist = 28 }) {
           m.visible = false
           return m
         }
+        window.__grassBlades = (window.__grassBlades || 0) + tile.count
         list.push({ center: tile.center, spit: tile.center.z < -12, hi: make(templates.hi, materials.hi), lo: make(templates.lo, materials.lo) })
       }
     return list
