@@ -19,6 +19,7 @@ export function settingsFor(tierName) {
   q.tier = tierName
   q.godRays = q.effects === 'full'
   q.ao = q.effects === 'full'
+  q.contact = tierName === 'high' || tierName === 'ultra'
   return q
 }
 
@@ -67,6 +68,7 @@ export const debug = {
   shadow: !off('shadow'),
   envCapture: !off('envcap'),
   ao: !off('ao'),
+  contact: !off('contact'),
   grade: !off('grade'),
   // ?tm=agx|aces|neutral picks the tone mapper (for comparisons).
   tm: params.get('tm'),

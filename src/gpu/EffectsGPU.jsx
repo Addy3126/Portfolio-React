@@ -36,6 +36,10 @@ import {
   abs,
   exp,
   perspectiveDepthToViewZ,
+  getViewPosition,
+  getScreenPosition,
+  interleavedGradientNoise,
+  screenCoordinate,
 } from 'three/tsl'
 import { ao as gtao } from 'three/examples/jsm/tsl/display/GTAONode.js'
 import { smaa } from 'three/examples/jsm/tsl/display/SMAANode.js'
@@ -61,10 +65,10 @@ const grade = Fn(([c0]) => {
   return clamp(mix(vec3(l2), c, float(1.0).add(float(1.0).sub(sat).mul(0.18))), 0.0, 1.0)
 })
 
-export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false, aoFull = false }) {
+export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false, aoFull = false, contact = false }) {
   const { gl, scene, camera, size } = useThree()
 
-  const { pipeline, sunUV, sunOn } = useMemo(() => {
+  const { pipeline, sunUV, sunOn, sunView } = useMemo(() => {
     const pipeline = new THREE.RenderPipeline(gl)
     pipeline.outputColorTransform = false
     const scenePass = pass(scene, camera)
@@ -140,6 +144,46 @@ export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false,
       })()
       hdr = hdr.mul(mix(vec3(0.05, 0.045, 0.16), vec3(1.0), pow(clamp(occ, 0.0, 1.0), 1.15)))
     }
+    const sunView = uniform(new THREE.Vector3())
+    if (contact) {
+      // Screen-space contact shadows: from each pixel a short ray runs toward the sun through
+      // the depth buffer; if a surface sits in front of the ray (within a thin slab) the
+      // pixel is shadowed. Gives grass blades, flowers, stones and piano legs the small
+      // shadows a shadow map can't resolve. Faded out with distance.
+      const depthTex = scenePass.getTextureNode('depth')
+      const near = uniform(camera.near)
+      const far = uniform(camera.far)
+      const projM = uniform(camera.projectionMatrix)
+      const projInv = uniform(camera.projectionMatrixInverse)
+      const STEPS = 12
+      const lit = Fn(() => {
+        const d = depthTex.sample(uv()).x.toVar()
+        const res = float(1.0).toVar()
+        If(d.lessThan(0.99999), () => {
+          const P = getViewPosition(uv(), d, projInv).toVar()
+          const dist = length(P).toVar()
+          const len = clamp(dist.mul(0.025), 0.12, 0.7)
+          const stepV = sunView.mul(len.div(STEPS)).toVar()
+          const jitter = interleavedGradientNoise(screenCoordinate)
+          const p = P.add(stepV.mul(jitter)).toVar()
+          const bias = dist.mul(0.002).add(0.01)
+          const occ = float(0.0).toVar()
+          for (let i = 0; i < STEPS; i++) {
+            p.addAssign(stepV)
+            const sUv = getScreenPosition(p, projM)
+            const inside = sUv.x.greaterThan(0.0).and(sUv.x.lessThan(1.0)).and(sUv.y.greaterThan(0.0)).and(sUv.y.lessThan(1.0))
+            const zs = perspectiveDepthToViewZ(depthTex.sample(sUv).x, near, far)
+            const dz = zs.sub(p.z)
+            const hit = inside.and(dz.greaterThan(bias)).and(dz.lessThan(0.35))
+            // Nearer hits count fully, the last steps fade (soft end of the shadow).
+            occ.assign(max(occ, hit.select(float(1.0 - (i / STEPS) * 0.5), float(0.0))))
+          }
+          res.assign(float(1.0).sub(occ.mul(float(1.0).sub(smoothstep(18.0, 40.0, dist)))))
+        })
+        return res
+      })()
+      hdr = hdr.mul(mix(vec3(0.52, 0.5, 0.7), vec3(1.0), lit))
+    }
     if (godRays) {
       // Light shafts (screen-space, as the WebGL GodRays): a bright sun disc where the sky
       // is visible, blurred radially away from the sun at half resolution.
@@ -192,8 +236,8 @@ export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false,
     const out = renderOutput(vec4(grain, 1.0), THREE.NoToneMapping, THREE.SRGBColorSpace)
     pipeline.outputNode = smaa(out)
     pipeline._texel = texel
-    return { pipeline, sunUV, sunOn }
-  }, [gl, scene, camera, godRays, gradeOn, ao, aoFull])
+    return { pipeline, sunUV, sunOn, sunView }
+  }, [gl, scene, camera, godRays, gradeOn, ao, aoFull, contact])
 
   useEffect(() => {
     pipeline._texel.value.set(1 / (size.width * gl.getPixelRatio()), 1 / (size.height * gl.getPixelRatio()))
@@ -207,6 +251,7 @@ export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false,
     tmp.copy(camera.position).addScaledVector(SUN_DIR, 1400).project(camera)
     sunUV.value.set(tmp.x * 0.5 + 0.5, 0.5 - tmp.y * 0.5) // screen uv: y down
     sunOn.value = tmp.z < 1 ? 1 : 0
+    sunView.value.copy(SUN_DIR).transformDirection(camera.matrixWorldInverse) // for contact shadows
     pipeline.render()
   }, 1)
 
