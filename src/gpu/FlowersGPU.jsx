@@ -35,7 +35,7 @@ import { BOX_MIN, BOX_SIZE } from '../scene/Petals'
 import { lilyGeometry, toInstanced } from '../scene/flower'
 import { color } from '../scene/world'
 import { REFLECTION_HIDDEN } from './SeaGPU'
-import { applyFog, hash12, spow, u, vnoise } from './tsl'
+import { applyFog, hash12, spow, u, viewNormal, vnoise } from './tsl'
 
 // Planted lilies and bells, and the floating flowers, on the WebGPU path. Same geometry,
 // placement and shading as the WebGL versions (scene/flower.js, FieldFlowers, Petals).
@@ -121,6 +121,7 @@ const basis = (xb, up, zb, v) => xb.mul(v.x).add(up.mul(v.y)).add(zb.mul(v.z))
 function finishFlower(m, worldNode, normalNode, kindNode) {
   m.positionNode = worldNode
   const vN = varying(normalNode)
+  m.normalNode = viewNormal(normalize(vN).mul(faceDirection))
   const vUv = varying(attribute('uv', 'vec2'))
   const vPart = varying(attribute('part', 'float'))
   const vKind = varying(kindNode)
@@ -174,6 +175,7 @@ function stemMaterial() {
   const r = iParams.w.greaterThan(0.5).select(0.0035, 0.006).mul(float(1.0).sub(t.mul(0.35)))
   m.positionNode = stemPoint(t).add(vec3(P.x, 0, P.z).mul(r))
   const vN = varying(normalize(vec3(P.x, 0, P.z)))
+  m.normalNode = viewNormal(normalize(vN))
   const vT = varying(t)
   m.colorNode = Fn(() => {
     const toP = positionWorld.sub(cameraPosition)

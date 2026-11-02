@@ -1,11 +1,11 @@
-import { useRef } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Canvas, extend, useFrame } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
-import { debug, grassEnabled, settingsFor } from '../quality'
+import { autoQualityEnabled, debug, grassEnabled, settingsFor, tier as startTier } from '../quality'
 import CameraRig from '../scene/CameraRig'
 import CursorField from '../scene/CursorField'
 import Piano from '../scene/Piano'
-import { FrameLimiter } from '../scene/Perf'
+import { Adaptive, FrameLimiter } from '../scene/Perf'
 import { SUN_DIR, shared } from '../scene/world'
 import EffectsGPU from './EffectsGPU'
 import { FieldFlowersGPU, PetalsGPU } from './FlowersGPU'
@@ -56,15 +56,62 @@ async function createRenderer(props) {
   return renderer
 }
 
-export default function ExperienceGPU({ hovered, selected, onHover, onSelect, onReady }) {
-  const q = settingsFor(0)
+export default function ExperienceGPU({ hovered, selected, onHover, onSelect, onReady, onFail }) {
+  // If WebGPU can't start, its device is lost later (driver reset), or the GPU runs out of
+  // memory, hand over to the WebGL scene instead of leaving a blank or frozen canvas.
+  const failRef = useRef(onFail)
+  failRef.current = onFail
+  const gl = useCallback(async (props) => {
+    const fail = (why, detail) => {
+      console.warn(`WebGPU ${why}, switching to WebGL:`, detail)
+      failRef.current?.()
+    }
+    let r
+    try {
+      r = await createRenderer(props)
+    } catch (e) {
+      fail('failed to start', e)
+      throw e
+    }
+    // Tearing down a renderer whose device is gone can throw; nothing is left to free.
+    const dispose = r.dispose.bind(r)
+    r.dispose = () => {
+      try {
+        dispose()
+      } catch {
+        /* device already lost */
+      }
+    }
+    r.onDeviceLost = (info) => {
+      if (info?.reason !== 'destroyed') fail('device lost', info?.message) // 'destroyed': our own teardown
+    }
+    const device = r.backend.device
+    device?.addEventListener('uncapturederror', (e) => {
+      if (e.error?.constructor?.name === 'GPUOutOfMemoryError') fail('out of memory', e.error.message)
+    })
+    const onRejection = (e) => {
+      if (/popErrorScope|GPUDevice/.test(String(e.reason?.message ?? e.reason))) fail('error', e.reason?.message)
+    }
+    const onError = (e) => /GPUDevice/.test(e.message) && fail('error', e.message)
+    window.addEventListener('unhandledrejection', onRejection)
+    window.addEventListener('error', onError)
+    const d2 = r.dispose
+    r.dispose = () => {
+      window.removeEventListener('unhandledrejection', onRejection)
+      window.removeEventListener('error', onError)
+      d2()
+    }
+    return r
+  }, [])
+  const [tier, setTier] = useState(startTier)
+  const q = useMemo(() => settingsFor(tier), [tier])
   return (
     <Canvas
       className="scene"
       frameloop={debug.fps === 0 ? 'always' : 'demand'}
       dpr={q.dpr}
       camera={{ fov: 42, near: 0.1, far: 3000, position: [0, 1, 9] }}
-      gl={createRenderer}
+      gl={gl}
       onCreated={({ gl, camera }) => {
         gl.toneMapping = THREE.NeutralToneMapping
         camera.layers.enable(REFLECTION_HIDDEN) // grass and flowers: seen, but not reflected
@@ -72,6 +119,7 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       onPointerMissed={() => onSelect(null)}
     >
       {debug.fps > 0 && <FrameLimiter fps={debug.fps} />}
+      {autoQualityEnabled && debug.fps > 0 && <Adaptive tier={tier} onTier={setTier} startTier={startTier} baseDpr={q.dpr[1]} />}
       <Clock onReady={onReady} />
       <CameraRig />
       <CursorField />

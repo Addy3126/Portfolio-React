@@ -24,6 +24,7 @@ import {
   vec3,
   vec4,
 } from 'three/tsl'
+import { cameraViewMatrix, normalize, vec4 as v4 } from 'three/tsl'
 import { shared } from '../scene/world'
 
 // Uniforms mirroring the shared values the WebGL shaders use. Vectors and colours share
@@ -252,3 +253,7 @@ export const fbm3g = Fn(([p0]) => {
   })
   return v
 })
+
+// A world-space normal in view space, for material.normalNode (read by the AO pass's
+// normal buffer; the scene's own shading works in world space).
+export const viewNormal = (Nw) => normalize(cameraViewMatrix.mul(v4(Nw, 0.0)).xyz)

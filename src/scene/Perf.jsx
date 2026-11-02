@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { FPS_CAP, MAX_LEVEL } from '../quality'
+import { FPS_CAP, TIER_ORDER } from '../quality'
 
 // Drives an on-demand render loop at a fixed frame rate.
 export function FrameLimiter({ fps = FPS_CAP }) {
@@ -25,18 +25,30 @@ export function FrameLimiter({ fps = FPS_CAP }) {
   return null
 }
 
-// Watches real frame intervals. If the scene can't hold the cap (frames run ~35% long
-// for two seconds), it steps quality down one level. It never steps back up, so it
-// can't oscillate; a reload starts again from the detected tier.
-export function AutoQuality({ level, onLevel, fps = FPS_CAP }) {
-  const s = useRef({ last: 0, start: performance.now(), sum: 0, n: 0, windowStart: 0, settleUntil: 0 })
+// Adaptive quality. Watches the real interval between rendered frames (the scene renders at
+// FPS_CAP, so anything slower means the GPU can't keep up) over two-second windows:
+// - late frames: lower the render resolution in steps (to 70%), then drop a tier;
+// - on time for a while: raise the resolution back, then try the next tier up (at most one
+//   above the starting guess). A tier that proves too slow is never tried again, so it
+//   settles instead of oscillating.
+const BUDGET = 1000 / FPS_CAP
+const STEP = 0.15
+const MIN_SCALE = 0.7
+export function Adaptive({ tier, onTier, startTier, baseDpr }) {
+  const setDpr = useThree((s) => s.setDpr)
+  const s = useRef(null)
+  if (!s.current) s.current = { last: 0, start: performance.now(), sum: 0, n: 0, windowStart: 0, settleUntil: 0, goodSince: 0, scale: 1, failed: new Set(), probe: null }
+  const idx = TIER_ORDER.indexOf(tier)
+  const maxIdx = Math.min(TIER_ORDER.length - 1, TIER_ORDER.indexOf(startTier) + 1)
+
   useFrame(() => {
     const st = s.current
     const now = performance.now()
     const dt = now - st.last
     st.last = now
     // Ignore shader warm-up, tab switches and the settle time after a change.
-    if (now - st.start < 4000 || now < st.settleUntil || dt > 1000 || level >= MAX_LEVEL) return
+    // (Slow frames still count: only a hidden tab or a stall over 1.5 s is skipped.)
+    if (now - st.start < 4000 || now < st.settleUntil || document.hidden || dt > 1500) return
     if (!st.windowStart) st.windowStart = now
     st.sum += dt
     st.n++
@@ -45,10 +57,39 @@ export function AutoQuality({ level, onLevel, fps = FPS_CAP }) {
     st.sum = 0
     st.n = 0
     st.windowStart = 0
-    if (avg > (1000 / fps) * 1.35) {
-      st.settleUntil = now + 3000
-      onLevel(level + 1)
+    window.__adaptive = { tier, scale: st.scale, avg: Math.round(avg * 10) / 10 }
+    const apply = (scale) => {
+      st.scale = scale
+      setDpr(Math.min(window.devicePixelRatio, baseDpr) * scale)
     }
+
+    if (avg > BUDGET * 1.3) {
+      st.goodSince = 0
+      st.settleUntil = now + 2500
+      if (st.probe !== null) {
+        // The tier we just tried is too much for this machine: go back and remember.
+        st.failed.add(st.probe)
+        st.probe = null
+        onTier(TIER_ORDER[idx - 1])
+      } else if (st.scale > MIN_SCALE + 1e-3) apply(Math.max(MIN_SCALE, st.scale - STEP))
+      else if (idx > 0) {
+        apply(1)
+        onTier(TIER_ORDER[idx - 1])
+      }
+      return
+    }
+    if (avg < BUDGET * 1.08) {
+      if (!st.goodSince) st.goodSince = now
+      if (st.probe !== null && now - st.goodSince > 6000) st.probe = null // the new tier holds
+      if (now - st.goodSince < 8000) return
+      st.goodSince = now
+      if (st.scale < 1 - 1e-3) apply(Math.min(1, st.scale + STEP))
+      else if (idx < maxIdx && !st.failed.has(idx + 1)) {
+        st.probe = idx + 1
+        st.settleUntil = now + 2500
+        onTier(TIER_ORDER[idx + 1])
+      }
+    } else st.goodSince = 0
   })
   return null
 }

@@ -29,7 +29,7 @@ import { FIELD, TILE, bladeTemplate, buildTile, seeded } from '../scene/Grass'
 import { color, palette, shared } from '../scene/world'
 import { REFLECTION_HIDDEN } from './SeaGPU'
 import { pianoShadow } from './shadow'
-import { applyFog, spow, u, vnoise } from './tsl'
+import { applyFog, spow, u, viewNormal, vnoise } from './tsl'
 
 // The grass field on the WebGPU path: the same tiles, blades and shading as the WebGL
 // grass (Bezier blades with wind, clumps, patches, edge-on widening, cursor parting,
@@ -123,6 +123,7 @@ function makeMaterial(hi) {
   m.positionNode = base.add(B).add(sideAxis.mul(side).mul(w))
   const n0 = normalize(cross(sideAxis, normalize(dB.add(vec3(0, 1e-4, 0)))))
   const vNormal = varying(normalize(n0.add(sideAxis.mul(side).mul(1.6))))
+  m.normalNode = viewNormal(normalize(vNormal).mul(faceDirection))
   const vT = varying(t)
   const vRand = varying(rnd)
   const vTone = varying(iClump.x)

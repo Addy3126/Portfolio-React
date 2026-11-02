@@ -128,7 +128,7 @@ const bakeColor = Fn(() => {
   return vec4(col, T)
 })
 
-const CUBE_SIZE = tier === 'low' ? 512 : 1024
+const CUBE_SIZE = tier === 'low' || tier === 'minimal' ? 512 : 1024
 
 export default function SkyGPU() {
   const mesh = useRef()

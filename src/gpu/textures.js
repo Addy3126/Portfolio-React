@@ -6,8 +6,8 @@ import { tier } from '../quality'
 //   <name>_s : R = albedo luminance (mean 0.5), G = roughness, B = ambient occlusion
 //   <name>_n : RG = tangent-space normal (OpenGL), B = height
 // The scene keeps its own palette: luminance modulates the colour, it doesn't replace it.
-// 2K on the high tier, 1K otherwise.
-const RES = tier === 'high' ? '2k' : '1k'
+// 2K when the device starts on the ultra tier, 1K otherwise.
+const RES = tier === 'ultra' ? '2k' : '1k'
 const loader = new THREE.TextureLoader()
 const cache = new Map()
 

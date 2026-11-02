@@ -6,6 +6,8 @@ import {
   If,
   Loop,
   clamp,
+  unpackRGBToNormal,
+  packNormalToRGB,
   dot,
   float,
   fract,
@@ -13,11 +15,15 @@ import {
   length,
   max,
   min,
+  mrt,
+  normalView,
+  output,
   mix,
   pass,
   pow,
   renderOutput,
   rtt,
+  sample,
   sin,
   smoothstep,
   step,
@@ -91,11 +97,16 @@ export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false 
 
     let hdr = clean
     if (ao) {
+      // Real surface normals for the AO (a second target in the scene pass): rebuilt from
+      // depth they mottle large smooth surfaces like the piano lid.
+      scenePass.setMRT(mrt({ output, normal: packNormalToRGB(normalView) }))
+      const normalTex = scenePass.getTextureNode('normal')
+      const sceneNormal = sample((p) => unpackRGBToNormal(normalTex.sample(p)))
       // Ground-truth AO at half resolution (normals rebuilt from depth): contact shadows
       // where things meet, as N8AO on the WebGL path (radius 1.2 m, tinted, strength 2.2).
-      const aoPass = gtao(scenePass.getTextureNode('depth'), null, camera)
+      const aoPass = gtao(scenePass.getTextureNode('depth'), sceneNormal, camera)
       aoPass.resolutionScale = 0.5
-      aoPass.radius.value = 1.2
+      aoPass.radius.value = 0.9
       aoPass.distanceFallOff.value = 0.6
       aoPass.samples.value = 12
       // Soften the half-resolution result (5x5 taps) so it doesn't speckle smooth surfaces,
@@ -105,7 +116,7 @@ export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false 
       let sum = float(0.0)
       for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) sum = sum.add(aoTex.sample(uv().add(vec2(i, j).mul(texel).mul(2.0))).r)
       const occ = mix(sum.div(25.0), float(1.0), smoothstep(-25.0, -60.0, viewZ))
-      hdr = hdr.mul(mix(vec3(0.05, 0.045, 0.16), vec3(1.0), pow(clamp(occ, 0.0, 1.0), 1.8)))
+      hdr = hdr.mul(mix(vec3(0.05, 0.045, 0.16), vec3(1.0), pow(clamp(occ, 0.0, 1.0), 1.15)))
     }
     if (godRays) {
       // Light shafts (screen-space, as the WebGL GodRays): a bright sun disc where the sky

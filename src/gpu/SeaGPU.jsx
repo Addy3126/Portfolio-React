@@ -24,7 +24,7 @@ import {
   vec3,
 } from 'three/tsl'
 import { color, palette } from '../scene/world'
-import { applyFog, foamShadeAt, landDist, seabedY, spow, swash, u, vnoise } from './tsl'
+import { applyFog, foamShadeAt, landDist, seabedY, spow, swash, u, viewNormal, vnoise } from './tsl'
 
 // Sea, as the WebGL sea: swell in the vertex stage, short waves and ripples as normals,
 // Beer-Lambert water colour over the sloping seabed, crest scattering toward the sun, sun
@@ -90,6 +90,7 @@ function seaMaterial(refl) {
   const s = swellFn(p0, t).mul(damp)
   m.positionNode = positionLocal.add(vec3(0, s.x, 0))
   const swellSlope = varying(s.yz)
+  m.normalNode = viewNormal(vec3(0, 1, 0))
 
   m.colorNode = Fn(() => {
     const W = positionWorld
