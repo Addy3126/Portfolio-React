@@ -111,46 +111,54 @@ function placements() {
   return list
 }
 
-export default function Rocks() {
-  const { headland, groups } = useMemo(() => {
-    const variants = [
-      rockGeometry(3, { detail: 4, flatTop: 0.7, terrace: 0.6, cliff: 0.75 }), // tall, layered stacks
-      rockGeometry(4, { detail: 4, flatTop: 0.6, terrace: 0.55, cliff: 0.7 }),
-      rockGeometry(5, { detail: 4, flatTop: 0.65, terrace: 0.5, cliff: 0.65 }),
-      rockGeometry(6, { detail: 2, flatTop: 0.4, terrace: 0.2, rough: 1.3, cliff: 0.2 }), // boulders
-      rockGeometry(7, { detail: 2, flatTop: 0.35, terrace: 0.15, rough: 1.4, cliff: 0.15 }),
-    ]
-    variants.push(pebbleGeometry(11), pebbleGeometry(12), cobbleGeometry(13), cobbleGeometry(14))
-    const mat = rockMaterial()
-    const stoneMat = stoneMaterial()
-    const byVariant = variants.map(() => [])
-    for (const p of placements()) byVariant[p[7]].push(p)
-    const m4 = new THREE.Matrix4()
-    const q = new THREE.Quaternion()
-    const groups = byVariant
-      .map((list, v) => {
-        if (!list.length) return null
-        const mesh = new THREE.InstancedMesh(variants[v], v >= 5 ? stoneMat : mat, list.length)
-        list.forEach(([x, y, z, sx, sy, sz, ry], i) => {
-          q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry)
-          m4.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sy, sz))
-          mesh.setMatrixAt(i, m4)
-        })
-        mesh.computeBoundingSphere()
-        return mesh
+// Instanced rocks and stones by variant (shared with the WebGPU path, which passes its own
+// materials). Each mesh gets an iInfo attribute: per-instance seed and scale.
+export function rockGroups(mat, stoneMat) {
+  const variants = [
+    rockGeometry(3, { detail: 4, flatTop: 0.7, terrace: 0.6, cliff: 0.75 }), // tall, layered stacks
+    rockGeometry(4, { detail: 4, flatTop: 0.6, terrace: 0.55, cliff: 0.7 }),
+    rockGeometry(5, { detail: 4, flatTop: 0.65, terrace: 0.5, cliff: 0.65 }),
+    rockGeometry(6, { detail: 2, flatTop: 0.4, terrace: 0.2, rough: 1.3, cliff: 0.2 }), // boulders
+    rockGeometry(7, { detail: 2, flatTop: 0.35, terrace: 0.15, rough: 1.4, cliff: 0.15 }),
+  ]
+  variants.push(pebbleGeometry(11), pebbleGeometry(12), cobbleGeometry(13), cobbleGeometry(14))
+  const byVariant = variants.map(() => [])
+  for (const p of placements()) byVariant[p[7]].push(p)
+  const m4 = new THREE.Matrix4()
+  const q = new THREE.Quaternion()
+  return byVariant
+    .map((list, v) => {
+      if (!list.length) return null
+      const mesh = new THREE.InstancedMesh(variants[v], v >= 5 ? stoneMat : mat, list.length)
+      const info = new Float32Array(list.length * 4)
+      list.forEach(([x, y, z, sx, sy, sz, ry], i) => {
+        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry)
+        m4.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sy, sz))
+        mesh.setMatrixAt(i, m4)
+        const seed = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453
+        info.set([seed - Math.floor(seed), sx, sy, sz], i * 4)
       })
-      .filter(Boolean)
-    // Display copies of the headland without faces no camera can see (the full meshes are
-    // kept for raycasting building heights).
-    const headland = headlandMeshes().map((src) => {
-      const m = new THREE.Mesh(cullHidden(src.geometry, src.matrixWorld), src.material)
-      m.position.copy(src.position)
-      m.rotation.copy(src.rotation)
-      m.scale.copy(src.scale)
-      return m
+      mesh.geometry.setAttribute('iInfo', new THREE.InstancedBufferAttribute(info, 4))
+      mesh.computeBoundingSphere()
+      return mesh
     })
-    return { headland, groups }
-  }, [])
+    .filter(Boolean)
+}
+
+// Display copies of the headland without faces no camera can see (the full meshes are
+// kept for raycasting building heights).
+export function headlandDisplay(material) {
+  return headlandMeshes().map((src) => {
+    const m = new THREE.Mesh(cullHidden(src.geometry, src.matrixWorld), material ?? src.material)
+    m.position.copy(src.position)
+    m.rotation.copy(src.rotation)
+    m.scale.copy(src.scale)
+    return m
+  })
+}
+
+export default function Rocks() {
+  const { headland, groups } = useMemo(() => ({ groups: rockGroups(rockMaterial(), stoneMaterial()), headland: headlandDisplay() }), [])
 
   return (
     <group>

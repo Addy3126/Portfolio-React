@@ -10,6 +10,7 @@ import EffectsGPU from './EffectsGPU'
 import { FieldFlowersGPU, PetalsGPU } from './FlowersGPU'
 import GrassGPU from './GrassGPU'
 import GroundGPU from './GroundGPU'
+import RocksGPU from './RocksGPU'
 import SeaGPU, { REFLECTION_HIDDEN } from './SeaGPU'
 import SkyGPU from './SkyGPU'
 import { sync } from './tsl'
@@ -69,6 +70,7 @@ export default function ExperienceGPU({ onSelect, onReady }) {
       {grassEnabled && <GrassGPU density={q.grassDensity} hiDist={q.grassHi} loDist={q.grassLo} />}
       {grassEnabled && <FieldFlowersGPU />}
       {debug.flowers && <PetalsGPU count={q.petals} />}
+      <RocksGPU />
 
       <EffectsGPU godRays={q.godRays && debug.godRays} gradeOn={debug.grade} />
     </Canvas>
