@@ -28,3 +28,7 @@ for n in names:
         Image.fromarray(s).resize((res, res), Image.LANCZOS).save(f'{out}/{n}_s_{tag}.webp', quality=q, method=6)
         Image.fromarray(nm).resize((res, res), Image.LANCZOS).save(f'{out}/{n}_n_{tag}.webp', quality=q + 6, method=6)
     print(n)
+
+# Boulder models (tools/simplify-boulders.mjs) use three's standard maps instead:
+#   public/models/<name>_c.webp (grey albedo, mean 0.5), <name>_orm.webp (R = AO,
+#   G = roughness), <name>_n.webp (OpenGL normal map), all 1K.

@@ -9,6 +9,7 @@ import FieldFlowers from './FieldFlowers'
 import Grass from './Grass'
 import Ground from './Ground'
 import Life from './Life'
+import Boulders from './Boulders'
 import { Adaptive, FrameLimiter } from './Perf'
 import Petals from './Petals'
 import Piano from './Piano'
@@ -83,6 +84,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       {grassEnabled && <ShorePlants />}
       {debug.flowers && <Petals count={q.petals} />}
       <Rocks />
+      <Boulders />
       <Plateau />
       <Ruins hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano />

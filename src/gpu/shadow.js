@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { texturesReady } from '../textureReady'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
 import { Fn, If, float, texture, uniform, vec2, vec4 } from 'three/tsl'
@@ -107,10 +108,13 @@ export const beachShadow = Fn(([wp]) => {
 export function BeachShadowGPU() {
   const { gl, scene } = useThree()
   const done = useRef(0)
+  // Wait for the streamed-in casters (scanned boulders) before baking.
+  const [ready, setReady] = useState(false)
+  useEffect(() => void texturesReady().then(() => setReady(true)), [])
   const camera = useRef(null)
   if (!camera.current) camera.current = beachCamera(THREE.OrthographicCamera)
   useFrame(() => {
-    if (done.current > 3) return
+    if (!ready || done.current > 3) return
     if (++done.current < 3) return
     const cam = camera.current
     const override = scene.overrideMaterial

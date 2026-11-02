@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { texturesReady } from '../textureReady'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { SUN_DIR, shared } from './world'
@@ -33,9 +34,12 @@ export default function BeachShadow() {
     return { target, camera: beachCamera(THREE.OrthographicCamera) }
   }, [])
   useEffect(() => () => target.dispose(), [target])
+  // Wait for the streamed-in casters (scanned boulders) before baking.
+  const [ready, setReady] = useState(false)
+  useEffect(() => void texturesReady().then(() => setReady(true)), [])
 
   useFrame(() => {
-    if (done.current > 3) return
+    if (!ready || done.current > 3) return
     if (++done.current < 3) return
     const override = scene.overrideMaterial
     const background = scene.background

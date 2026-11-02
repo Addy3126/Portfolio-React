@@ -8,6 +8,7 @@ import CursorField from '../scene/CursorField'
 import Piano from '../scene/Piano'
 import ShorePlants from '../scene/ShorePlants'
 import Life from '../scene/Life'
+import Boulders from '../scene/Boulders'
 import { Adaptive, FrameLimiter } from '../scene/Perf'
 import { SUN_DIR, shared } from '../scene/world'
 import EffectsGPU from './EffectsGPU'
@@ -143,6 +144,7 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       {grassEnabled && <ShorePlants />}
       {debug.flowers && <PetalsGPU count={q.petals} />}
       <RocksGPU />
+      <Boulders />
       <PlateauGPU />
       <RuinsGPU hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano captureEnv={captureEnvGPU} />
