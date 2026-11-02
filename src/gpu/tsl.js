@@ -22,6 +22,7 @@ import {
   uniform,
   vec2,
   vec3,
+  vec4,
 } from 'three/tsl'
 import { shared } from '../scene/world'
 
@@ -127,3 +128,95 @@ export const applyFog = Fn(([col, dist, V]) => {
 })
 
 export const smooth = smoothstep
+
+// --- Shore swash and foam (ported from swashGLSL) ---
+const hash22 = Fn(([p]) => {
+  const p3 = fract(vec3(p.x, p.y, p.x).mul(vec3(0.1031, 0.103, 0.0973))).toVar()
+  p3.addAssign(dot(p3, p3.yzx.add(33.33)))
+  return fract(p3.xx.add(p3.yz).mul(p3.zy))
+})
+// Voronoi: x = F1 (distance to the nearest cell centre), y = F2 - F1 (small along borders).
+// The 3x3 cell loop is unrolled at build time.
+export const voronoi2 = Fn(([p, t]) => {
+  const i = floor(p)
+  const f = fract(p)
+  const d1 = float(8.0).toVar()
+  const d2 = float(8.0).toVar()
+  for (let y = -1; y <= 1; y++) {
+    for (let x = -1; x <= 1; x++) {
+      const g = vec2(x, y)
+      const o = sin(t.add(hash22(i.add(g)).mul(6.2831))).mul(0.42).add(0.5)
+      const d = length(g.add(o).sub(f))
+      d2.assign(min(d2, max(d1, d)))
+      d1.assign(min(d1, d))
+    }
+  }
+  return vec2(d1, d2.sub(d1))
+})
+
+// L = landDist (metres, + on land). Returns x: water cover over the sand, y: foam,
+// z: sand wetness, w: rim shadow beside the foam line.
+export const swash = Fn(([xz, L, t]) => {
+  const out = vec4(0.0).toVar()
+  If(L.lessThan(-10.0), () => {
+    out.assign(vec4(1, 0, 0, 0))
+  }).ElseIf(L.lessThanEqual(4.5), () => {
+    const seed = vnoise(xz.mul(0.05).add(3.1))
+    const ph = fract(t.div(8.0).add(seed.mul(2.3)))
+    const UP = 0.4
+    const s = ph.lessThan(UP).select(float(1.0).sub(pow(max(float(1.0).sub(ph.div(UP)), 0.0), 2.2)), pow(max(float(1.0).sub(ph.sub(UP).div(1.0 - UP)), 0.0), 1.5))
+    const cusp = float(0.7).add(vnoise(xz.mul(0.21).add(seed.mul(9.0))).mul(0.55))
+    const reach = cusp.mul(2.3)
+    const R = float(0.1).add(reach.mul(s))
+    const wig = vnoise(xz.mul(1.3).add(vec2(t.mul(0.04), 0.0))).sub(0.5).mul(0.35).add(vnoise(xz.mul(3.7)).sub(0.5).mul(0.12))
+    const e = L.sub(R).add(wig)
+    const cover = float(1.0).sub(smoothstep(-0.04, 0.02, e))
+    const advancing = float(1.0).sub(smoothstep(UP - 0.08, UP + 0.02, ph))
+
+    const lineW = float(0.09).add(advancing.mul(0.22))
+    const line = smoothstep(lineW.negate(), lineW.mul(-0.25), e)
+      .mul(float(1.0).sub(smoothstep(-0.02, 0.015, e)))
+      .mul(float(0.75).add(vnoise(xz.mul(9.0)).mul(0.25)))
+
+    const behind = max(e.negate(), 0.0)
+    const patchy = vnoise(xz.mul(0.9).add(vec2(t.mul(0.05), t.mul(-0.03)))).mul(0.6).add(vnoise(xz.mul(2.4).sub(t.mul(0.04))).mul(0.4))
+    const dens0 = exp(behind.mul(-1.15))
+      .mul(float(0.45).add(s.mul(0.55)))
+      .mul(smoothstep(0.15, 0.6, patchy.add(exp(behind.mul(-1.5)).mul(0.25))))
+    const surf = float(1.0)
+      .sub(smoothstep(-6.0, -0.5, L))
+      .mul(smoothstep(-12.0, -6.0, L))
+      .mul(smoothstep(0.62, 0.85, vnoise(vec2(L.mul(0.7).sub(t.mul(0.3)), xz.x.add(xz.y).mul(0.07)))))
+      .mul(0.45)
+    const dens = max(dens0.mul(cover), surf)
+    const p = xz.mul(2.2).add(vec2(t.mul(0.02), t.mul(0.035))).toVar()
+    p.addAssign(vec2(vnoise(xz.mul(1.1).add(3.0)), vnoise(xz.mul(1.1).sub(5.0))).sub(0.5).mul(1.6))
+    p.addAssign(vec2(vnoise(xz.mul(4.3).add(t.mul(0.1))), vnoise(xz.mul(4.3).add(9.0))).sub(0.5).mul(0.45))
+    const vA = voronoi2(p, t.mul(0.2))
+    const vB = voronoi2(p.mul(2.4).add(4.0), t.mul(0.25))
+    const width = mix(0.02, 0.45, dens)
+    const strands = max(
+      float(1.0).sub(smoothstep(width.mul(0.55), width, vA.y)),
+      float(1.0).sub(smoothstep(width.mul(0.45), width.mul(0.9), vB.y)).mul(0.85),
+    )
+    const vC = voronoi2(xz.mul(14.0).add(p.mul(0.5)), t.mul(0.6))
+    const holes = float(1.0)
+      .sub(smoothstep(0.12, 0.26, vC.x))
+      .mul(smoothstep(0.35, 0.85, dens))
+      .mul(smoothstep(0.35, 0.65, vnoise(xz.mul(5.0).add(1.0))))
+    const lace = strands.mul(smoothstep(0.02, 0.2, dens)).mul(float(1.0).sub(holes.mul(0.9)))
+    const foam = clamp(max(line, lace.mul(float(0.6).add(dens.mul(0.4)))), 0.0, 1.0)
+    const wet = float(1.0).sub(smoothstep(reach.sub(0.1), reach.add(0.8), L.add(wig)))
+    const rimLine = smoothstep(0.0, 0.03, e).mul(float(1.0).sub(smoothstep(0.03, 0.12, e))).mul(float(0.4).add(advancing.mul(0.6)))
+    out.assign(vec4(cover, foam, wet, rimLine))
+  })
+  return out
+})
+
+// Foam colour: bright but lit by the twilight, warmer toward the sun, with a little tonal
+// variation and relief (thicker foam catches more light).
+export const foamShadeAt = Fn(([base, V, xz, amt]) => {
+  const sd = max(dot(V, u.sunDir), 0.0)
+  const shade = base.mul(0.78).add(u.fogGlow.mul(float(0.08).add(pow(sd, 6.0).mul(0.35))))
+  return shade.mul(float(0.86).add(vnoise(xz.mul(7.0)).mul(0.14))).mul(float(0.85).add(amt.mul(0.15)))
+})

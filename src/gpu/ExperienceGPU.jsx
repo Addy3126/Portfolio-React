@@ -5,7 +5,9 @@ import { debug, settingsFor } from '../quality'
 import CameraRig from '../scene/CameraRig'
 import { FrameLimiter } from '../scene/Perf'
 import { SUN_DIR, shared } from '../scene/world'
+import EffectsGPU from './EffectsGPU'
 import GroundGPU from './GroundGPU'
+import SeaGPU from './SeaGPU'
 import SkyGPU from './SkyGPU'
 import { sync } from './tsl'
 
@@ -55,7 +57,10 @@ export default function ExperienceGPU({ onSelect, onReady }) {
       <directionalLight position={[-6, 4, 12]} color="#8a8fe0" intensity={0.9} />
 
       <SkyGPU />
+      <SeaGPU reflection={debug.reflection ? q.reflection : 0} />
       <GroundGPU />
+
+      <EffectsGPU godRays={q.godRays && debug.godRays} gradeOn={debug.grade} />
     </Canvas>
   )
 }
