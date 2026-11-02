@@ -15,6 +15,7 @@ import {
   min,
   mix,
   pass,
+  pow,
   renderOutput,
   rtt,
   sin,
@@ -27,6 +28,7 @@ import {
   vec3,
   vec4,
 } from 'three/tsl'
+import { ao as gtao } from 'three/examples/jsm/tsl/display/GTAONode.js'
 import { smaa } from 'three/examples/jsm/tsl/display/SMAANode.js'
 import { reducedMotion } from '../quality'
 import { SUN_DIR } from '../scene/world'
@@ -34,7 +36,7 @@ import { u } from './tsl'
 
 // Post-processing on the WebGPU path, matching the WebGL chain:
 // sanitize -> light shafts -> neutral tone mapping -> grade -> vignette -> grain -> sRGB
-// -> SMAA. (Ambient occlusion joins on the higher tiers in a later step.)
+// -> SMAA, with ground-truth ambient occlusion first on the tiers that can afford it.
 
 const LUMA = vec3(0.2126, 0.7152, 0.0722)
 
@@ -50,7 +52,7 @@ const grade = Fn(([c0]) => {
   return clamp(mix(vec3(l2), c, float(1.0).add(float(1.0).sub(sat).mul(0.18))), 0.0, 1.0)
 })
 
-export default function EffectsGPU({ godRays = true, gradeOn = true }) {
+export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false }) {
   const { gl, scene, camera, size } = useThree()
 
   const { pipeline, sunUV, sunOn } = useMemo(() => {
@@ -88,6 +90,23 @@ export default function EffectsGPU({ godRays = true, gradeOn = true }) {
     })()
 
     let hdr = clean
+    if (ao) {
+      // Ground-truth AO at half resolution (normals rebuilt from depth): contact shadows
+      // where things meet, as N8AO on the WebGL path (radius 1.2 m, tinted, strength 2.2).
+      const aoPass = gtao(scenePass.getTextureNode('depth'), null, camera)
+      aoPass.resolutionScale = 0.5
+      aoPass.radius.value = 1.2
+      aoPass.distanceFallOff.value = 0.6
+      aoPass.samples.value = 12
+      // Soften the half-resolution result (5x5 taps) so it doesn't speckle smooth surfaces,
+      // and fade it out with distance: rebuilt normals at grazing angles far away (the sea)
+      // would otherwise read as occlusion.
+      const aoTex = aoPass.getTextureNode()
+      let sum = float(0.0)
+      for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) sum = sum.add(aoTex.sample(uv().add(vec2(i, j).mul(texel).mul(2.0))).r)
+      const occ = mix(sum.div(25.0), float(1.0), smoothstep(-25.0, -60.0, viewZ))
+      hdr = hdr.mul(mix(vec3(0.05, 0.045, 0.16), vec3(1.0), pow(clamp(occ, 0.0, 1.0), 1.8)))
+    }
     if (godRays) {
       // Light shafts (screen-space, as the WebGL GodRays): a bright sun disc where the sky
       // is visible, blurred radially away from the sun at half resolution.
@@ -141,7 +160,7 @@ export default function EffectsGPU({ godRays = true, gradeOn = true }) {
     pipeline.outputNode = smaa(out)
     pipeline._texel = texel
     return { pipeline, sunUV, sunOn }
-  }, [gl, scene, camera, godRays, gradeOn])
+  }, [gl, scene, camera, godRays, gradeOn, ao])
 
   useEffect(() => {
     pipeline._texel.value.set(1 / (size.width * gl.getPixelRatio()), 1 / (size.height * gl.getPixelRatio()))

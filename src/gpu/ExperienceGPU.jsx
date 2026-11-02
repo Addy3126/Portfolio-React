@@ -14,7 +14,7 @@ import GroundGPU from './GroundGPU'
 import RocksGPU from './RocksGPU'
 import { PlateauGPU, RuinsGPU } from './RuinsGPU'
 import { PianoShadowGPU } from './shadow'
-import SeaGPU, { REFLECTION_HIDDEN } from './SeaGPU'
+import SeaGPU, { REFLECTION_HIDDEN, seaSwap } from './SeaGPU'
 import SkyGPU from './SkyGPU'
 import { sync } from './tsl'
 
@@ -40,7 +40,11 @@ function captureEnvGPU(gl, scene, at) {
   const rt = new THREE.CubeRenderTarget(256, { type: THREE.HalfFloatType })
   const cam = new THREE.CubeCamera(0.3, 3000, rt)
   cam.position.copy(at)
+  const sea = seaSwap.mesh
+  const live = sea?.material
+  if (sea) sea.material = seaSwap.plain
   cam.update(gl, scene)
+  if (sea) sea.material = live
   return rt
 }
 
@@ -89,7 +93,7 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       <RuinsGPU hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano captureEnv={captureEnvGPU} />
 
-      <EffectsGPU godRays={q.godRays && debug.godRays} gradeOn={debug.grade} />
+      <EffectsGPU godRays={q.godRays && debug.godRays} gradeOn={debug.grade} ao={q.ao && debug.ao} />
     </Canvas>
   )
 }
