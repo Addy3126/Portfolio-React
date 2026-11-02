@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { TOWERS } from './ruins/layout'
 import { seeded } from './ruins/noise3'
 import { rockGeometry, rockMaterial } from './ruins/rocks'
+import { cobbleGeometry, pebbleGeometry, stoneMaterial } from './ruins/stones'
 import { plateauTopAt } from './Plateau'
 import { cullHidden } from './visibility'
 import { bankX, shoreZ, spitHalfWidth, spitPoint } from './world'
@@ -73,37 +74,39 @@ function placements() {
     }
   }
 
-  // Rocks along the spit's edges, and a rocky end.
-  // Pebbles and small stones scattered over the spit, a little denser toward its end.
-  for (let i = 0; i < 160; i++) {
+  // Beach stones (variants 5-6 = pebble shapes, 7-8 = cobbles): rest on the sand, partly
+  // sunk in. [x, y, z, sx, sy, sz, rotY, variant]
+  const stone = (x, z, size) => {
+    const peb = size < 0.16
+    const v = peb ? 5 + Math.floor(rand() * 2) : 7 + Math.floor(rand() * 2)
+    const sy = size * (peb ? 1 : 0.85 + rand() * 0.3)
+    list.push([x, -0.03 + sy * (peb ? 0.14 : 0.2), z, size * (1.1 + rand() * 0.5), sy, size * (0.8 + rand() * 0.4), rand() * 6.28, v])
+  }
+  // Pebbles and small stones over the spit, a little denser toward its end.
+  for (let i = 0; i < 220; i++) {
     const t = Math.pow(rand(), 0.7)
     const [cx, cz] = spitPoint(t)
     const side = rand() < 0.5 ? -1 : 1
     const off = spitHalfWidth(t) * rand() * 1.05
-    const s = 0.04 + rand() * rand() * (0.14 + t * 0.12)
-    list.push([cx + side * off * 0.9, -0.1, cz + side * off * 0.3, s * 1.4, s * (0.6 + rand() * 0.6), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
+    stone(cx + side * off * 0.9, cz + side * off * 0.3, 0.035 + rand() * rand() * (0.14 + t * 0.14))
   }
   {
     const [ex, ez] = spitPoint(1)
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 40; i++) {
       const a = rand() * Math.PI * 2
       const r = rand() * 4
-      const s = 0.06 + rand() * rand() * 0.4
-      list.push([ex + Math.cos(a) * r, -0.02, ez + Math.sin(a) * r, s * 1.3, s * (0.7 + rand() * 0.7), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
+      stone(ex + Math.cos(a) * r, ez + Math.sin(a) * r, 0.05 + rand() * rand() * 0.4)
     }
   }
-  // Rocks along the main beach and the channel bank.
-  for (let i = 0; i < 26; i++) {
+  // Along the main beach (mostly in the swash zone) and the channel bank.
+  for (let i = 0; i < 70; i++) {
     const x = -20 + rand() * 32
-    const z = shoreZ(x) - 0.6 + rand() * 1.4
-    const s = 0.12 + rand() * rand() * 0.55
-    list.push([x, -0.05, z, s * 1.4, s * (0.7 + rand() * 0.6), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
+    const z = shoreZ(x) - 0.8 + rand() * 2.0
+    stone(x, z, 0.04 + rand() * rand() * 0.55)
   }
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 16; i++) {
     const z = -14 + rand() * 24
-    const x = bankX(z) - 0.5 + rand() * 1.2
-    const s = 0.15 + rand() * rand() * 0.5
-    list.push([x, -0.05, z, s * 1.4, s * (0.7 + rand() * 0.6), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
+    stone(bankX(z) - 0.6 + rand() * 1.4, z, 0.05 + rand() * rand() * 0.45)
   }
   return list
 }
@@ -117,7 +120,9 @@ export default function Rocks() {
       rockGeometry(6, { detail: 2, flatTop: 0.4, terrace: 0.2, rough: 1.3, cliff: 0.2 }), // boulders
       rockGeometry(7, { detail: 2, flatTop: 0.35, terrace: 0.15, rough: 1.4, cliff: 0.15 }),
     ]
+    variants.push(pebbleGeometry(11), pebbleGeometry(12), cobbleGeometry(13), cobbleGeometry(14))
     const mat = rockMaterial()
+    const stoneMat = stoneMaterial()
     const byVariant = variants.map(() => [])
     for (const p of placements()) byVariant[p[7]].push(p)
     const m4 = new THREE.Matrix4()
@@ -125,7 +130,7 @@ export default function Rocks() {
     const groups = byVariant
       .map((list, v) => {
         if (!list.length) return null
-        const mesh = new THREE.InstancedMesh(variants[v], mat, list.length)
+        const mesh = new THREE.InstancedMesh(variants[v], v >= 5 ? stoneMat : mat, list.length)
         list.forEach(([x, y, z, sx, sy, sz, ry], i) => {
           q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry)
           m4.compose(new THREE.Vector3(x, y, z), q, new THREE.Vector3(sx, sy, sz))
