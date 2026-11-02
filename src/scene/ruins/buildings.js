@@ -7,9 +7,9 @@ import { color, shared } from '../world'
 export const KIND = { wall: 0, slab: 1, column: 2, core: 3, rebar: 4, vine: 5, trim: 6 }
 
 const STYLES = {
-  concrete: { floor: 3.0, winH: 0.5, sills: false, lintel: false },
-  brick: { floor: 3.3, winH: 0.55, sills: true, lintel: false },
-  stone: { floor: 3.6, winH: 0.5, sills: true, lintel: true },
+  concrete: { floor: 3.0, winH: 0.5, sills: false, lintel: false, balconies: true },
+  brick: { floor: 3.3, winH: 0.55, sills: true, lintel: false, balconies: true },
+  stone: { floor: 3.6, winH: 0.5, sills: true, lintel: true, balconies: false },
 }
 
 // Builds one building as a single merged geometry (position, normal, aKind) plus the
@@ -83,6 +83,22 @@ export function buildTower(spec, rand) {
           const [x, z] = side.place(u0, t + 0.04)
           windows.push({ x, y: sill + wh / 2, z, w: ww * 0.94, h: wh * 0.94 })
         }
+        // What's left of a window frame: a mullion and a transom, some missing or bent.
+        if (!side.front && rand() < 0.45) {
+          const bent = rand() < 0.3 ? (rand() - 0.5) * 0.5 : 0
+          faceBox(side, u0, sill + wh / 2, 0.06, wh, 0.08, t * 0.6, KIND.rebar, bent)
+          if (rand() < 0.6) faceBox(side, u0, sill + wh * 0.66, ww, 0.05, 0.08, t * 0.6, KIND.rebar)
+        }
+        // Balconies on the brick and concrete blocks, some cracked off at an angle.
+        if (st.balconies && f > 0 && f < tops[si][c] && rand() < 0.16) {
+          const drop = rand() < 0.3
+          const out = -0.55
+          faceBox(side, u0, y0 + 0.1, ww + 0.4, 0.16, 1.1, out, KIND.slab, drop ? (rand() < 0.5 ? -1 : 1) * (0.12 + rand() * 0.2) : 0)
+          if (!drop) {
+            faceBox(side, u0, y0 + 0.62, ww + 0.4, 0.06, 0.06, -1.06, KIND.rebar)
+            for (let r = -2; r <= 2; r++) faceBox(side, u0 + (r * (ww + 0.3)) / 4, y0 + 0.4, 0.04, 0.5, 0.04, -1.06, KIND.rebar)
+          }
+        }
       }
       // Broken columns: a ragged chunk of wall and exposed rebar above the last floor.
       if (tops[si][c] < n - 1 || spec.broken) {
@@ -100,6 +116,45 @@ export function buildTower(spec, rand) {
   // Floor slabs (protruding slightly) up to the intact part, dark core behind the openings,
   // corner columns.
   for (let f = 1; f <= minTop + 1; f++) box(0, f * fh - 0.15, 0, w + 0.2, 0.3, d + 0.2, KIND.slab)
+  // Above the intact part, broken floors: a slab snapped at the wall and hanging from its
+  // rebar, tilted down and out from the face.
+  if (spec.broken) {
+    const hangs = 1 + Math.floor(rand() * 2)
+    for (let hI = 0; hI < hangs; hI++) {
+      const f = minTop + 1 + Math.floor(rand() * 2)
+      const side = sides[Math.floor(rand() * 4)]
+      const u = (rand() - 0.5) * side.len * 0.5
+      const len = 1.4 + rand() * 1.2
+      const ang = 0.7 + rand() * 0.5 // from horizontal, hinged at the wall
+      const width = side.len * (0.25 + rand() * 0.2)
+      const yHinge = f * fh - 0.15
+      // Slab built flat in face space (x along the face, z outward), rotated about the
+      // hinge line, then mapped onto the face with the same place() as everything else.
+      const g = new THREE.BoxGeometry(width, 0.25, len).translate(0, 0, len / 2)
+      g.rotateX(ang)
+      const [hx, hz] = side.place(u, 0)
+      const [ox, oz] = side.place(u, -1)
+      const outX = ox - hx
+      const outZ = oz - hz
+      const m = new THREE.Matrix4().makeBasis(new THREE.Vector3(outZ, 0, -outX), new THREE.Vector3(0, 1, 0), new THREE.Vector3(outX, 0, outZ)).setPosition(hx, yHinge, hz)
+      const ng = g.toNonIndexed()
+      g.dispose()
+      ng.applyMatrix4(m)
+      pos.push(...ng.attributes.position.array)
+      nor.push(...ng.attributes.normal.array)
+      for (let i = 0; i < ng.attributes.position.count; i++) kind.push(KIND.slab)
+      ng.dispose()
+      for (let r = 0; r < 4; r++) {
+        const [rx, rz] = side.place(u + (r - 1.5) * width * 0.25, -0.05)
+        box(rx, yHinge + 0.05, rz, 0.04, 0.45, 0.04, KIND.rebar, (rand() - 0.5) * 0.8, 0, (rand() - 0.5) * 0.8)
+      }
+    }
+  }
+  // Debris heaped inside the ground floor, seen through the openings.
+  for (let i = 0; i < 6; i++) {
+    const sx = 0.4 + rand() * 1.1
+    box((rand() - 0.5) * (w - 1.2), 0.15 + rand() * 0.25, (rand() - 0.5) * (d - 1.2), sx, 0.3 + rand() * 0.4, sx * (0.6 + rand() * 0.6), KIND.slab, (rand() - 0.5) * 0.6, rand() * 3, (rand() - 0.5) * 0.6)
+  }
   const coreH = (minTop + 1) * fh
   box(0, coreH / 2, 0, w - 2 * t - 0.3, coreH, d - 2 * t - 0.3, KIND.core)
   for (const [cx, cz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) box((cx * w) / 2, coreH / 2, (cz * d) / 2, 0.5, coreH, 0.5, KIND.column)
@@ -110,27 +165,42 @@ export function buildTower(spec, rand) {
     box(0, n * fh + 0.75, 0, w + 0.1, 0.7, d + 0.1, KIND.wall)
   }
 
-  // Vines trailing down the walls and over ledges.
-  const vines = 5 + Math.floor(rand() * 5)
+  // Ivy: stems climb from the ground and spread across the wall, branching as they go,
+  // with leaves (small tilted quads) clustered along them; plus a few vines trailing down
+  // from broken tops. Leaves are thin boxes in the vine colour, so one material covers it.
+  const leaf = (side, u, y, size, out) => faceBox(side, u, y, size, size * (0.75 + rand() * 0.4), 0.03, out, KIND.vine, (rand() - 0.5) * 1.6)
+  const climbers = 2 + Math.floor(rand() * 4)
+  for (let v = 0; v < climbers; v++) {
+    const si = Math.floor(rand() * 4)
+    const side = sides[si]
+    const maxY = Math.min((Math.min(...tops[si]) + 1) * fh - 0.3, 3 + rand() * 9)
+    const grow = (u, y, dirU, len, depth) => {
+      const steps = Math.ceil(len / 0.35)
+      for (let k = 0; k < steps && y < maxY && Math.abs(u) < side.len / 2 - 0.2; k++) {
+        u += dirU * 0.35 + (rand() - 0.5) * 0.12
+        y += 0.3 * (0.6 + rand() * 0.5)
+        faceBox(side, u, y, 0.05, 0.36, 0.04, -0.03, KIND.vine, (rand() - 0.5) * 0.6)
+        const n = 3 + Math.floor(rand() * 3)
+        for (let l = 0; l < n; l++) leaf(side, u + (rand() - 0.5) * 0.5, y + (rand() - 0.5) * 0.35, 0.16 + rand() * 0.14, -0.05 - rand() * 0.07)
+        if (depth < 2 && rand() < 0.16) grow(u, y, (rand() < 0.5 ? -1 : 1) * (0.4 + rand() * 0.6), len * 0.5, depth + 1)
+      }
+    }
+    grow((rand() - 0.5) * side.len * 0.8, 0, (rand() - 0.5) * 0.8, 3 + rand() * 9, 0)
+  }
+  const vines = 3 + Math.floor(rand() * 3)
   for (let v = 0; v < vines; v++) {
     const si = Math.floor(rand() * 4)
     const side = sides[si]
     const cols = tops[si].length
     const c = Math.floor(rand() * cols)
     const yStart = (tops[si][c] + 1) * fh - 0.2
-    const len = Math.min(yStart - 0.5, 4 + rand() * 8)
+    const len = Math.min(yStart - 0.5, 3 + rand() * 6)
     if (len < 1.5) continue
-    const u = -side.len / 2 + (c + 0.15 + rand() * 0.7) * (side.len / cols)
-    const segs = 6
-    let drift = 0
-    for (let sgm = 0; sgm < segs; sgm++) {
-      const segLen = len / segs
-      const yc = yStart - segLen * (sgm + 0.5)
-      drift += (rand() - 0.5) * 0.35
-      const taper = 1 - (sgm / segs) * 0.5
-      faceBox(side, u + drift, yc, (0.25 + rand() * 0.2) * taper, segLen * 1.05, 0.06, -0.05, KIND.vine)
-      for (let l = 0; l < 2; l++)
-        faceBox(side, u + drift + (rand() - 0.5) * 0.9 * taper, yc + (rand() - 0.5) * segLen, (0.6 + rand() * 0.5) * taper, 0.4 + rand() * 0.35, 0.1, -0.09, KIND.vine, (rand() - 0.5) * 0.9)
+    let u = -side.len / 2 + (c + 0.15 + rand() * 0.7) * (side.len / cols)
+    for (let y = yStart; y > yStart - len; y -= 0.32) {
+      u += (rand() - 0.5) * 0.1
+      faceBox(side, u, y, 0.04, 0.34, 0.04, -0.03, KIND.vine)
+      for (let l = 0; l < 2; l++) leaf(side, u + (rand() - 0.5) * 0.35, y + (rand() - 0.5) * 0.3, 0.14 + rand() * 0.12, -0.05 - rand() * 0.05)
     }
   }
 
