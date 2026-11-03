@@ -10,7 +10,7 @@ export const PIANO_POS = new THREE.Vector3(-2.55, 0, 3.7)
 // Coastline. Keep in sync with shoreGLSL in glsl.js.
 // Front shore: a wavy line, plus a grassy spit reaching out toward the ruins on the right.
 export const shoreZ = (x) => -8 + Math.sin(x * 0.15) * 1.2 + Math.sin(x * 0.37 + 1.3) * 0.5
-// Left bank: a water channel separates the field from the rock plateau.
+// Left bank: the field ends at a water channel.
 export const bankX = (z) => -22 - 1.5 * Math.sin(z * 0.13) - 0.8 * Math.sin(z * 0.41 + 2.0)
 // Main field only (positive = on land).
 export const rightX = (z) => 58 + 3 * Math.sin(z * 0.17) + 1.5 * Math.sin(z * 0.5 + 1)

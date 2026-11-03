@@ -31,7 +31,7 @@ export const HEADLAND_BUILDINGS = [
   { x: 240, z: -248, w: 5, d: 5, h: 11, broken: true, style: 'stone' },
 ]
 
-// Ruins along the terraces of the rock plateau on the left (base height from the rock).
+// Smaller ruins standing in the shallows on the left.
 export const PLATEAU_BUILDINGS = [
   { x: -58.0, z: -263.9, w: 5, d: 5, h: 8, broken: true, style: 'stone' },
   { x: -96.1, z: -255.1, w: 6, d: 6, h: 12, style: 'brick' },

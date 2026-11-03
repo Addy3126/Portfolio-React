@@ -16,7 +16,7 @@ import { FieldFlowersGPU, PetalsGPU } from './FlowersGPU'
 import GrassGPU from './GrassGPU'
 import GroundGPU from './GroundGPU'
 import RocksGPU from './RocksGPU'
-import { PlateauGPU, RuinsGPU } from './RuinsGPU'
+import { RuinsGPU } from './RuinsGPU'
 import { BeachShadowGPU, PianoShadowGPU } from './shadow'
 import SeaGPU, { REFLECTION_HIDDEN, seaSwap } from './SeaGPU'
 import SkyGPU from './SkyGPU'
@@ -145,7 +145,6 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       {debug.flowers && <PetalsGPU count={q.petals} />}
       <RocksGPU />
       <Boulders />
-      <PlateauGPU />
       <RuinsGPU hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano captureEnv={captureEnvGPU} />
       {debug.life && <Life />}

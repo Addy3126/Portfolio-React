@@ -2,7 +2,6 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { fogGLSL } from './glsl'
-import { plateauTopAt } from './Plateau'
 import { headlandTopAt } from './Rocks'
 import { buildTower, buildingMaterial } from './ruins/buildings'
 import { HEADLAND_BUILDINGS, PLATEAU_BUILDINGS, SLABS, TOWERS } from './ruins/layout'
@@ -130,10 +129,8 @@ export default function Ruins({ hovered, selected, onHover, onSelect, mats = mat
     () => HEADLAND_BUILDINGS.map((b) => ({ spec: b, baseY: (headlandTopAt(b.x, b.z) ?? 8) - 0.8 })),
     [],
   )
-  // Towers that fall on the plateau stand on its surface; plus the ruins along its terraces.
-  const towerBase = useMemo(() => TOWERS.map((t) => { const top = plateauTopAt(t.x, t.z); return top === null ? 0 : top - 0.5 }), [])
-  const plateau = useMemo(() => PLATEAU_BUILDINGS.map((b) => ({ spec: b, baseY: (plateauTopAt(b.x, b.z) ?? 0) - 0.5 })), [])
-  const slabs = useMemo(() => SLABS.filter(([x, z]) => plateauTopAt(x, z) === null), [])
+  // The smaller ruins on the left stand in the shallows, sunk a little so they read as rooted.
+  const plateau = useMemo(() => PLATEAU_BUILDINGS.map((b) => ({ spec: b, baseY: -1 })), [])
 
   return (
     <group>
@@ -142,7 +139,7 @@ export default function Ruins({ hovered, selected, onHover, onSelect, mats = mat
           key={i}
           index={i}
           spec={t}
-          baseY={towerBase[i]}
+          baseY={0}
           state={t.project === undefined ? 'idle' : selected === t.project ? 'selected' : hovered === t.project ? 'hover' : 'idle'}
           onHover={onHover}
           onSelect={onSelect}
@@ -156,7 +153,7 @@ export default function Ruins({ hovered, selected, onHover, onSelect, mats = mat
       {plateau.map((p, i) => (
         <Building key={`p${i}`} index={200 + i} spec={p.spec} baseY={p.baseY} state="idle" onHover={onHover} onSelect={onSelect} mats={mats} makeWindow={makeWindow} />
       ))}
-      {slabs.map(([x, z, w, h, d, ry, rz], i) => (
+      {SLABS.map(([x, z, w, h, d, ry, rz], i) => (
         <mesh key={`s${i}`} geometry={slabGeometry(w, h, d)} material={mats.concrete} position={[x, h * 0.2, z]} rotation={[0, ry, rz]} />
       ))}
     </group>

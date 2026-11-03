@@ -4,7 +4,6 @@ import { TOWERS } from './ruins/layout'
 import { seeded } from './ruins/noise3'
 import { rockGeometry, rockMaterial } from './ruins/rocks'
 import { cobbleGeometry, pebbleGeometry, stoneMaterial } from './ruins/stones'
-import { plateauTopAt } from './Plateau'
 import { BEACH_LAYER } from './BeachShadow'
 import { cullHidden } from './visibility'
 import { bankX, shoreZ, spitHalfWidth, spitPoint } from './world'
@@ -38,21 +37,9 @@ export function headlandTopAt(x, z) {
   return hit ? hit.point.y : null
 }
 
-// Sea stacks, placed clear of the sun and the project towers as seen from the field.
-const STACKS = [
-  [-40, -185, 6, 14, 6],
-  [-85, -240, 9, 16, 8],
-  [-150, -215, 5, 9, 5],
-  [-25, -330, 10, 20, 9],
-  [185, -215, 6, 10, 6],
-  [205, -170, 4, 7, 4],
-  [-60, -150, 3, 5, 3],
-]
-
 function placements() {
   const rand = seeded(4242)
   const list = [] // [x, y, z, sx, sy, sz, rotY, variant]
-  for (const [x, z, sx, sy, sz] of STACKS) if (plateauTopAt(x, z) === null) list.push([x, -0.5, z, sx, sy, sz, rand() * 6.28, Math.floor(rand() * 3)])
 
   // Fallen boulders around the headland's foot.
   for (const h of HEADLAND) {
@@ -65,13 +52,12 @@ function placements() {
 
   // Rubble and fallen blocks around each tower base.
   for (const t of TOWERS) {
-    const top = plateauTopAt(t.x, t.z)
     const n = 3 + Math.floor(rand() * 4)
     for (let i = 0; i < n; i++) {
       const a = rand() * Math.PI * 2
       const r = Math.max(t.w, t.d) * (0.55 + rand() * 0.5)
       const s = 0.8 + rand() * 2.2
-      list.push([t.x + Math.cos(a) * r, top === null ? -0.3 : top - 0.2, t.z + Math.sin(a) * r, s * 1.3, s * (0.6 + rand() * 0.6), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
+      list.push([t.x + Math.cos(a) * r, -0.3, t.z + Math.sin(a) * r, s * 1.3, s * (0.6 + rand() * 0.6), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
     }
   }
 
@@ -116,9 +102,9 @@ function placements() {
 // materials). Each mesh gets an iInfo attribute: per-instance seed and scale.
 export function rockGroups(mat, stoneMat) {
   const variants = [
-    rockGeometry(3, { detail: 4, flatTop: 0.7, terrace: 0.6, cliff: 0.75 }), // tall, layered stacks
-    rockGeometry(4, { detail: 4, flatTop: 0.6, terrace: 0.55, cliff: 0.7 }),
-    rockGeometry(5, { detail: 4, flatTop: 0.65, terrace: 0.5, cliff: 0.65 }),
+    null, // variants 0-2 were the sea stacks (removed); indices kept for the placements
+    null,
+    null,
     rockGeometry(6, { detail: 2, flatTop: 0.4, terrace: 0.2, rough: 1.3, cliff: 0.2 }), // boulders
     rockGeometry(7, { detail: 2, flatTop: 0.35, terrace: 0.15, rough: 1.4, cliff: 0.15 }),
   ]
