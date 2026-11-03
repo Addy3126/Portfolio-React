@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { texturesReady } from '../textureReady'
 import { Canvas, useFrame } from '@react-three/fiber'
+import * as THREE from 'three'
 import { autoQualityEnabled, debug, grassEnabled, settingsFor, tier as startTier } from '../quality'
 import CameraRig from './CameraRig'
 import CursorField from './CursorField'
@@ -9,7 +10,7 @@ import FieldFlowers from './FieldFlowers'
 import Grass from './Grass'
 import Ground from './Ground'
 import Life from './Life'
-import Boulders from './Boulders'
+import ScannedRocks from './ScannedRocks'
 import { Adaptive, FrameLimiter } from './Perf'
 import Petals from './Petals'
 import Piano from './Piano'
@@ -18,7 +19,6 @@ import PianoShadow from './PianoShadow'
 import Ruins from './Ruins'
 import ShorePlants from './ShorePlants'
 import Rocks from './Rocks'
-import Plateau from './Plateau'
 import Sea from './Sea'
 import Sky from './Sky'
 import { SUN_DIR, shared } from './world'
@@ -58,7 +58,11 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       dpr={q.dpr}
       camera={{ fov: 42, near: 0.1, far: 3000, position: [0, 1, 9] }}
       gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }}
-      onCreated={() => (window.__backend = 'webgl')}
+      onCreated={({ scene }) => {
+        window.__backend = 'webgl'
+        // Haze for the standard materials (scanned rocks, piano), matching the custom shaders' fog.
+        scene.fog = new THREE.FogExp2(shared.uFogColor.value, shared.uFogDensity.value)
+      }}
       onPointerMissed={() => onSelect(null)}
     >
       {debug.fps > 0 && <FrameLimiter fps={debug.fps} />}
@@ -84,8 +88,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       {grassEnabled && <ShorePlants />}
       {debug.flowers && <Petals count={q.petals} />}
       <Rocks />
-      <Boulders />
-      <Plateau />
+      <ScannedRocks />
       <Ruins hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano />
       {debug.life && <Life />}

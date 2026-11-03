@@ -40,6 +40,14 @@ export default function App() {
   const [selected, setSelected] = useState(null)
   const lenis = useRef(null)
   const [renderer, setRenderer] = useState(null)
+  // Take the loader out once its fade has had time to run: a CSS transition can stall when
+  // the page is busy compiling shaders, and a timer still fires.
+  const [loaderGone, setLoaderGone] = useState(false)
+  useEffect(() => {
+    if (!ready) return
+    const id = setTimeout(() => setLoaderGone(true), 1800)
+    return () => clearTimeout(id)
+  }, [ready])
   useEffect(() => {
     if (webgl) pickRenderer().then(setRenderer)
   }, [])
@@ -107,9 +115,11 @@ export default function App() {
         <div className="scene fallback" role="img" aria-label="Twilight field with an empty grand piano" />
       )}
       {hud && <Hud />}
+      {!loaderGone && (
       <div className={`loader ${ready ? 'done' : ''}`} aria-hidden={ready}>
         <span>Tuning the piano</span>
       </div>
+      )}
       <Overlay
         goTo={goTo}
         hovered={hovered}

@@ -1,79 +1,14 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { TOWERS } from './ruins/layout'
 import { seeded } from './ruins/noise3'
-import { rockGeometry, rockMaterial } from './ruins/rocks'
+import { rockMaterial } from './ruins/rocks'
 import { cobbleGeometry, pebbleGeometry, stoneMaterial } from './ruins/stones'
-import { plateauTopAt } from './Plateau'
 import { BEACH_LAYER } from './BeachShadow'
-import { cullHidden } from './visibility'
 import { bankX, shoreZ, spitHalfWidth, spitPoint } from './world'
-
-// The headland: two large rock masses (shared with Ruins, which builds on top of them).
-export const HEADLAND = [
-  { seed: 1, position: [225, -6, -250], scale: [80, 30, 50], rotY: 0.3 },
-  { seed: 2, position: [175, -8, -230], scale: [40, 22, 30], rotY: -0.6 },
-]
-let headlandCache = null
-export function headlandMeshes() {
-  if (!headlandCache) {
-    const mat = rockMaterial()
-    headlandCache = HEADLAND.map((h) => {
-      const m = new THREE.Mesh(rockGeometry(h.seed, { detail: 5, flatTop: 0.7, terrace: 0.3, rough: 0.9, cliff: 0.4, faceted: false, fine: 0.12 }), mat)
-      m.position.set(...h.position)
-      m.scale.set(...h.scale)
-      m.rotation.y = h.rotY
-      m.updateMatrixWorld(true)
-      return m
-    })
-  }
-  return headlandCache
-}
-
-// Ground height on the headland at (x, z), or null if (x, z) isn't over it.
-const ray = new THREE.Raycaster()
-export function headlandTopAt(x, z) {
-  ray.set(new THREE.Vector3(x, 200, z), new THREE.Vector3(0, -1, 0))
-  const hit = ray.intersectObjects(headlandMeshes(), false)[0]
-  return hit ? hit.point.y : null
-}
-
-// Sea stacks, placed clear of the sun and the project towers as seen from the field.
-const STACKS = [
-  [-40, -185, 6, 14, 6],
-  [-85, -240, 9, 16, 8],
-  [-150, -215, 5, 9, 5],
-  [-25, -330, 10, 20, 9],
-  [185, -215, 6, 10, 6],
-  [205, -170, 4, 7, 4],
-  [-60, -150, 3, 5, 3],
-]
 
 function placements() {
   const rand = seeded(4242)
   const list = [] // [x, y, z, sx, sy, sz, rotY, variant]
-  for (const [x, z, sx, sy, sz] of STACKS) if (plateauTopAt(x, z) === null) list.push([x, -0.5, z, sx, sy, sz, rand() * 6.28, Math.floor(rand() * 3)])
-
-  // Fallen boulders around the headland's foot.
-  for (const h of HEADLAND) {
-    for (let i = 0; i < 9; i++) {
-      const a = rand() * Math.PI * 2
-      const s = 2 + rand() * 5
-      list.push([h.position[0] + Math.cos(a) * h.scale[0] * 1.02, -0.4, h.position[2] + Math.sin(a) * h.scale[2] * 1.02, s * 1.3, s * (0.6 + rand() * 0.5), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
-    }
-  }
-
-  // Rubble and fallen blocks around each tower base.
-  for (const t of TOWERS) {
-    const top = plateauTopAt(t.x, t.z)
-    const n = 3 + Math.floor(rand() * 4)
-    for (let i = 0; i < n; i++) {
-      const a = rand() * Math.PI * 2
-      const r = Math.max(t.w, t.d) * (0.55 + rand() * 0.5)
-      const s = 0.8 + rand() * 2.2
-      list.push([t.x + Math.cos(a) * r, top === null ? -0.3 : top - 0.2, t.z + Math.sin(a) * r, s * 1.3, s * (0.6 + rand() * 0.6), s, rand() * 6.28, 3 + Math.floor(rand() * 2)])
-    }
-  }
 
   // Beach stones (variants 5-6 = pebble shapes, 7-8 = cobbles): rest on the sand, partly
   // sunk in. [x, y, z, sx, sy, sz, rotY, variant]
@@ -112,15 +47,17 @@ function placements() {
   return list
 }
 
-// Instanced rocks and stones by variant (shared with the WebGPU path, which passes its own
+// Instanced beach stones by variant (shared with the WebGPU path, which passes its own
 // materials). Each mesh gets an iInfo attribute: per-instance seed and scale.
 export function rockGroups(mat, stoneMat) {
   const variants = [
-    rockGeometry(3, { detail: 4, flatTop: 0.7, terrace: 0.6, cliff: 0.75 }), // tall, layered stacks
-    rockGeometry(4, { detail: 4, flatTop: 0.6, terrace: 0.55, cliff: 0.7 }),
-    rockGeometry(5, { detail: 4, flatTop: 0.65, terrace: 0.5, cliff: 0.65 }),
-    rockGeometry(6, { detail: 2, flatTop: 0.4, terrace: 0.2, rough: 1.3, cliff: 0.2 }), // boulders
-    rockGeometry(7, { detail: 2, flatTop: 0.35, terrace: 0.15, rough: 1.4, cliff: 0.15 }),
+    // Variants 0-4 were code-generated rocks, now replaced by scans (ScannedRocks.jsx);
+    // the indices are kept for the stone placements below.
+    null,
+    null,
+    null,
+    null,
+    null,
   ]
   variants.push(pebbleGeometry(11), pebbleGeometry(12), cobbleGeometry(13), cobbleGeometry(14))
   const byVariant = variants.map(() => [])
@@ -147,26 +84,11 @@ export function rockGroups(mat, stoneMat) {
     .filter(Boolean)
 }
 
-// Display copies of the headland without faces no camera can see (the full meshes are
-// kept for raycasting building heights).
-export function headlandDisplay(material) {
-  return headlandMeshes().map((src) => {
-    const m = new THREE.Mesh(cullHidden(src.geometry, src.matrixWorld), material ?? src.material)
-    m.position.copy(src.position)
-    m.rotation.copy(src.rotation)
-    m.scale.copy(src.scale)
-    return m
-  })
-}
-
 export default function Rocks() {
-  const { headland, groups } = useMemo(() => ({ groups: rockGroups(rockMaterial(), stoneMaterial()), headland: headlandDisplay() }), [])
+  const groups = useMemo(() => rockGroups(rockMaterial(), stoneMaterial()), [])
 
   return (
     <group>
-      {headland.map((m, i) => (
-        <primitive key={`h${i}`} object={m} />
-      ))}
       {groups.map((m, i) => (
         <primitive key={`r${i}`} object={m} />
       ))}

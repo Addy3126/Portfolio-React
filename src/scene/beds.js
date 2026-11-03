@@ -5,8 +5,9 @@ import { PIANO_POS, spitPoint } from './world'
 const [ax, az] = spitPoint(0.34)
 const [bx, bz] = spitPoint(0.8)
 export const BEDS = [
-  [PIANO_POS.x + 4.4, PIANO_POS.z - 1.2, 2.0, 1.4, 150, 120, false],
-  [ax + 1.5, az, 2.3, 1.7, 120, 100, true],
+  // (The first two were widened when their lilies were doubled, so they don't turn into a carpet.)
+  [PIANO_POS.x + 4.6, PIANO_POS.z - 1.3, 2.6, 1.8, 150, 120, false],
+  [ax + 1.5, az, 2.8, 2.1, 120, 100, true],
   [bx - 1.6, bz + 0.8, 1.9, 1.4, 95, 80, true],
 ]
 

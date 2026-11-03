@@ -23,7 +23,6 @@ import {
   vec3,
 } from 'three/tsl'
 import Ruins, { DIM } from '../scene/Ruins'
-import { plateauMeshes } from '../scene/Plateau'
 import { color } from '../scene/world'
 import { rockMaterialsGPU } from './RocksGPU'
 import { surface } from './textures'
@@ -139,39 +138,4 @@ function windowMaterialGPU() {
 
 export function RuinsGPU(props) {
   return <Ruins {...props} mats={materials()} makeWindow={windowMaterialGPU} />
-}
-
-function sandMaterialGPU() {
-  const m = new THREE.MeshBasicNodeMaterial({ fog: false })
-  m.colorNode = Fn(() => {
-    const W = positionWorld
-    const toP = W.sub(cameraPosition)
-    const dist = length(toP)
-    const V = toP.div(dist)
-    const n = vnoise(W.xz.mul(0.6)).mul(0.6).add(vnoise(W.xz.mul(3.0)).mul(0.4))
-    const col = mix(c('#3a3c80'), c('#8d84bc'), smoothstep(0.35, 0.65, n)).mul(float(0.85).add(vnoise(W.xz.mul(9.0)).mul(0.3))).toVar()
-    const R = reflect(V, vec3(0, 1, 0))
-    col.addAssign(u.fogGlow.mul(pow(max(dot(R, u.sunDir), 0.0), 30.0)).mul(0.3).mul(float(1.0).sub(smoothstep(0.4, 0.6, n))))
-    return applyFog(col.mul(c('#9a92dc').mul(0.4).add(0.6)), dist, V)
-  })()
-  return m
-}
-
-export function PlateauGPU() {
-  const meshes = useMemo(() => {
-    const list = plateauMeshes(rockMaterialsGPU().rock, sandMaterialGPU())
-    // Extruded cliff layers have no curvature attribute (the rock shader reads it): flat.
-    for (const m of list) {
-      const g = m.geometry
-      if (!g.attributes.aCurv) g.setAttribute('aCurv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count), 1))
-    }
-    return list
-  }, [])
-  return (
-    <group>
-      {meshes.map((m, i) => (
-        <primitive key={i} object={m} />
-      ))}
-    </group>
-  )
 }
