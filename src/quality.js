@@ -11,9 +11,6 @@ const TIERS = {
 }
 export const TIER_ORDER = ['minimal', 'low', 'mid', 'high', 'ultra']
 
-// Frames per second the scene renders at (the page itself still scrolls at full rate).
-export const FPS_CAP = 45
-
 export function settingsFor(tierName) {
   const q = { ...TIERS[tierName] }
   q.tier = tierName
@@ -21,8 +18,6 @@ export function settingsFor(tierName) {
   q.ao = q.effects === 'full'
   q.contact = tierName === 'high' || tierName === 'ultra'
   q.reflectAll = tierName === 'high' || tierName === 'ultra'
-  // Static shadow map for the scanned rocks (texels per side; 0 = none).
-  q.rockShadows = params.get('rockshadow') === '0' ? 0 : ({ ultra: 4096, high: 4096, mid: 2048 }[tierName] ?? 0)
   return q
 }
 
@@ -62,6 +57,10 @@ function pickTier() {
 export const tier = pickTier()
 // Debug switches for tracking down rendering problems, e.g. ?godrays=0&reflection=0.
 const params = new URLSearchParams(window.location.search)
+// Static shadow map for the scanned rocks (texels per side; 0 = none). Fixed for the visit,
+// from the starting tier: turning shadows on or off, or resizing them, recompiles every lit
+// material, which stalled the page whenever adaptive quality changed tier.
+export const rockShadowSize = params.get('rockshadow') === '0' ? 0 : ({ ultra: 4096, high: 4096, mid: 2048 }[tier] ?? 0)
 const off = (name) => params.get(name) === '0'
 export const debug = {
   godRays: !off('godrays'),
@@ -81,8 +80,9 @@ export const debug = {
   grade: !off('grade'),
   // ?tm=agx|aces|neutral picks the tone mapper (for comparisons).
   tm: params.get('tm'),
-  // ?fps=0 renders every display frame (no cap); ?fps=60 sets a different cap.
-  fps: params.has('fps') ? Number(params.get('fps')) : FPS_CAP,
+  // ?fps=0 renders every display frame (no cap); ?fps=45 pins a rate. By default the scene
+  // renders at an even fraction of the display refresh (scene/Perf.jsx).
+  fps: params.has('fps') ? Number(params.get('fps')) : null,
   // ?msaa=0|2|4 overrides multisampling.
   msaa: params.has('msaa') ? Number(params.get('msaa')) : null,
 }

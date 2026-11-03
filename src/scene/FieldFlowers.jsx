@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { flowerShadeGLSL, flowerUniforms, lilyGeometry, toInstanced } from './flower'
 import { fogGLSL, noiseGLSL } from './glsl'
 import { BEDS } from './beds'
-import { PIANO_POS, color, hideInReflection, landDist, shared } from './world'
+import { PIANO_POS, color, hideInReflection, landDist, neverReflected, shared } from './world'
 
 // Shared stem maths: wind-bent curve from the ground (t = 0) to the flower head (t = 1).
 const stemGLSL = /* glsl */ `
@@ -311,7 +311,8 @@ export default function FieldFlowers() {
         g.instanceCount = list.length
         g.boundingSphere = sphere
       }
-      return { heads, stems }
+      // Off the spit, the mirrored view can't see them (see world.neverReflected).
+      return { heads, stems, field: sphere.center.z > -12 }
     })
   }, [])
 
@@ -333,20 +334,28 @@ export default function FieldFlowers() {
   }, [])
 
   const group = useRef()
+  const field = useRef()
   useEffect(() => {
     const g = group.current
+    const f = field.current
     hideInReflection.add(g)
-    return () => hideInReflection.delete(g)
+    neverReflected.add(f)
+    return () => {
+      hideInReflection.delete(g)
+      neverReflected.delete(f)
+    }
   }, [])
 
+  const bed = (g, i) => (
+    <group key={i}>
+      <mesh geometry={g.stems} material={materials.stem} />
+      <mesh geometry={g.heads} material={materials.head} />
+    </group>
+  )
   return (
     <group ref={group}>
-      {groups.map((g, i) => (
-        <group key={i}>
-          <mesh geometry={g.stems} material={materials.stem} />
-          <mesh geometry={g.heads} material={materials.head} />
-        </group>
-      ))}
+      <group ref={field}>{groups.filter((g) => g.field).map(bed)}</group>
+      {groups.filter((g) => !g.field).map(bed)}
     </group>
   )
 }

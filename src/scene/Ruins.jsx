@@ -73,6 +73,23 @@ function windowGeometry(windows) {
   return out
 }
 
+// Hover and click on a project tower test its bounding box rather than its every triangle:
+// a pointer move otherwise walked the whole merged building (tens of thousands of faces)
+// for each tower under the cursor.
+const _inv = new THREE.Matrix4()
+const _ray = new THREE.Ray()
+const _hit = new THREE.Vector3()
+function boxRaycast(raycaster, intersects) {
+  const g = this.geometry
+  if (!g.boundingBox) g.computeBoundingBox()
+  _inv.copy(this.matrixWorld).invert()
+  _ray.copy(raycaster.ray).applyMatrix4(_inv)
+  if (!_ray.intersectBox(g.boundingBox, _hit)) return
+  _hit.applyMatrix4(this.matrixWorld)
+  const distance = raycaster.ray.origin.distanceTo(_hit)
+  if (distance >= raycaster.near && distance <= raycaster.far) intersects.push({ distance, point: _hit.clone(), object: this })
+}
+
 function Building({ spec, index, baseY = 0, state, onHover, onSelect, mats, makeWindow }) {
   const built = useMemo(() => {
     const b = buildTower(spec, seeded(1000 + index * 37))
@@ -117,7 +134,7 @@ function Building({ spec, index, baseY = 0, state, onHover, onSelect, mats, make
   const [tz = 0, tx = 0] = spec.tilt || []
   return (
     <group position={[spec.x, baseY - (spec.sunk || 0), spec.z]} rotation={[tx, 0, tz]}>
-      <mesh geometry={built.geometry} material={mats[spec.style] || mats.concrete} {...handlers} />
+      <mesh geometry={built.geometry} material={mats[spec.style] || mats.concrete} {...handlers} {...(interactive && { raycast: boxRaycast })} />
       {windowGeo && <mesh geometry={windowGeo} material={windowMat} />}
     </group>
   )

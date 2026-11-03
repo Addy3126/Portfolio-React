@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { BEACH_LAYER } from './BeachShadow'
 import { TOWERS } from './ruins/layout'
 import { seeded } from './ruins/noise3'
-import { loadScan } from './scans'
+import { HAS_LO, loadScan } from './scans'
+import { track } from '../textureReady'
 import { shoreZ, spitPoint } from './world'
 
 // All the large rocks are photo-scanned models (Poly Haven's coastal "Smuggler's Cove" set
@@ -119,11 +121,52 @@ export async function headlandTopFn() {
   }
 }
 
+// Rocks further than this from the camera (to the rock's own edge) use the far level of
+// detail: a rock there covers a few dozen pixels, and the full scan would put several
+// triangles in each.
+const LOD_FAR = 70
+
+// Each scan with a far level of detail is drawn as two instanced meshes, near and far, and
+// every placement is assigned to one of them by its distance from the camera (rewritten
+// only when an assignment changes). Two meshes rather than one per area: on WebGPU every
+// instanced mesh compiles a pipeline of its own.
+function lodPair(near, far, items, box) {
+  const matrices = items.map((p) => placeMatrix(box, p).clone())
+  const spheres = matrices.map((m) => near.geometry.boundingSphere.clone().applyMatrix4(m))
+  const pair = { near, far, matrices, spheres, assigned: new Uint8Array(items.length).fill(2) }
+  for (const m of [near, far]) {
+    m.frustumCulled = false // spread over the whole coast; the far level is cheap to draw
+    m.count = 0
+  }
+  return pair
+}
+function updatePair(pair, camPos) {
+  const { near, far, matrices, spheres, assigned } = pair
+  let changed = false
+  for (let i = 0; i < spheres.length; i++) {
+    const s = spheres[i]
+    const isNear = camPos.distanceTo(s.center) - s.radius < LOD_FAR ? 1 : 0
+    if (assigned[i] !== isNear) {
+      assigned[i] = isNear
+      changed = true
+    }
+  }
+  if (!changed) return
+  near.count = far.count = 0
+  for (let i = 0; i < matrices.length; i++) {
+    const m = assigned[i] ? near : far
+    m.setMatrixAt(m.count++, matrices[i])
+  }
+  near.instanceMatrix.needsUpdate = far.instanceMatrix.needsUpdate = true
+}
+
 export default function ScannedRocks() {
   const [objects, setObjects] = useState(null)
+  const [pairs] = useState(() => [])
   useEffect(() => {
     let live = true
-    ;(async () => {
+    // Counts as loading: the warm-up behind the loading screen waits for the rocks too.
+    const setup = (async () => {
       const headland = await headlandMeshes()
       const list = placements()
       const names = [...new Set(list.map((p) => p[0]))]
@@ -131,23 +174,40 @@ export default function ScannedRocks() {
         names.map(async (name) => {
           const { geometry, material } = await loadScan(name)
           const items = list.filter((p) => p[0] === name)
-          const mesh = new THREE.InstancedMesh(geometry, material, items.length)
-          items.forEach((p, i) => mesh.setMatrixAt(i, placeMatrix(geometry.boundingBox, p)))
-          mesh.computeBoundingSphere()
-          mesh.castShadow = mesh.receiveShadow = true
-          mesh.layers.enable(BEACH_LAYER) // casts into the baked beach shadows
-          return mesh
+          const make = (g) => {
+            const mesh = new THREE.InstancedMesh(g, material, items.length)
+            mesh.castShadow = mesh.receiveShadow = true
+            mesh.layers.enable(BEACH_LAYER) // casts into the baked beach shadows
+            return mesh
+          }
+          const mesh = make(geometry)
+          if (!HAS_LO.has(name)) {
+            items.forEach((p, i) => mesh.setMatrixAt(i, placeMatrix(geometry.boundingBox, p)))
+            mesh.computeBoundingSphere()
+            return [mesh]
+          }
+          const far = make((await loadScan(name, 'lo')).geometry)
+          pairs.push(lodPair(mesh, far, items, geometry.boundingBox))
+          return [mesh, far]
         }),
       )
-      if (live) {
-        setObjects([...headland, ...groups])
-        rocksVersion.value++
-      }
+      if (live) setObjects([...headland, ...groups.flat()])
     })()
+    track(setup)
     return () => {
       live = false
     }
-  }, [])
+  }, [pairs])
+
+  // Once they're in the scene: render the static rock shadows again.
+  useEffect(() => {
+    if (objects) rocksVersion.value++
+  }, [objects])
+
+  useFrame(({ camera }) => {
+    for (const pair of pairs) updatePair(pair, camera.position)
+  })
+
   if (!objects) return null
   return (
     <group>

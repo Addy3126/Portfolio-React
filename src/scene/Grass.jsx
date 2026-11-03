@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { debug } from '../quality'
 import { bedFactor } from './beds'
 import { fogGLSL, noiseGLSL, shadowGLSL, rippleGLSL } from './glsl'
-import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, landDist, mainDist, palette, shared } from './world'
+import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, landDist, mainDist, neverReflected, palette, shared } from './world'
 
 // A tiled grass field in the spirit of Ghost of Tsushima's grass, adapted to WebGL2:
 // - 2.5 m tiles, each frustum-culled on its own
@@ -452,20 +452,28 @@ export default function Grass({ density = 140, hiDist = 10, loDist = 28 }) {
   })
 
   const group = useRef()
+  const field = useRef()
   useEffect(() => {
     const g = group.current
+    const f = field.current
     hideInReflection.add(g)
-    return () => hideInReflection.delete(g)
+    neverReflected.add(f)
+    return () => {
+      hideInReflection.delete(g)
+      neverReflected.delete(f)
+    }
   }, [])
 
+  const tile = (t, i) => (
+    <group key={i}>
+      <primitive object={t.hi} />
+      <primitive object={t.lo} />
+    </group>
+  )
   return (
     <group ref={group}>
-      {tiles.map((t, i) => (
-        <group key={i}>
-          <primitive object={t.hi} />
-          <primitive object={t.lo} />
-        </group>
-      ))}
+      <group ref={field}>{tiles.filter((t) => !t.spit).map(tile)}</group>
+      {tiles.filter((t) => t.spit).map(tile)}
     </group>
   )
 }

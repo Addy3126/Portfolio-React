@@ -1,23 +1,104 @@
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { FPS_CAP, TIER_ORDER } from '../quality'
+import { TIER_ORDER } from '../quality'
+import { motion } from '../store'
+import { texturesReady } from '../textureReady'
 
-// Drives an on-demand render loop at a fixed frame rate.
-export function FrameLimiter({ fps = FPS_CAP }) {
+// Warm-up tour, behind the loading screen: once the textures are in, render a frame from
+// each section's camera and from mid-flight (the camera rig runs first in a frame, so the
+// level-of-detail choices that follow see the new position), so every shader is compiled and
+// every texture is on the GPU before the page shows. Otherwise each was prepared the first
+// time it came into view, and every section stalled on its first visit.
+export const warm = { done: false }
+const TOUR = [1, 2, 3, 2.5, 1.5, 0.5, 0]
+export function Warmup({ onDone }) {
+  const st = useRef({ step: -1, saved: 0, mounted: 0, live: true })
+  useEffect(() => {
+    warm.done = false // (again, if the WebGL scene takes over from a failed WebGPU one)
+    const s = st.current
+    s.live = true
+    return () => {
+      s.live = false
+    }
+  }, [])
+  useFrame(() => {
+    const s = st.current
+    // Wait a few frames so everything has mounted and queued its downloads, then for those.
+    // (Two frames' grace after that, for what mounts once its download is in.)
+    if (++s.mounted === 3) texturesReady().then(() => s.live && (s.step = -3))
+    if (s.step === -1 || warm.done) return
+    if (s.step < -1) {
+      s.step = s.step === -2 ? 0 : s.step + 1
+      return
+    }
+    if (s.step === 0) s.saved = motion.progress
+    if (s.step >= TOUR.length) {
+      motion.progress = s.saved
+      warm.done = true
+      onDone()
+      return
+    }
+    motion.progress = TOUR[s.step++] // the camera rig places the camera from this
+  }, -10)
+  return null
+}
+
+// The frame rate the scene renders at (read by Adaptive).
+export const pace = { fps: 60 }
+// Highest rate the scene renders at automatically.
+const MAX_FPS = 75
+const RATES = [48, 50, 60, 72, 75, 90, 100, 120, 144, 165, 240]
+
+// Drives the on-demand render loop. With no fixed rate (the default) it renders on every
+// k-th display refresh, k picked so the rate is at most MAX_FPS: 60 Hz and 120 Hz screens
+// get 60 fps, 144 Hz gets 72. An even divisor of the refresh keeps every frame on screen
+// for the same time; a rate that doesn't divide it (45 fps on a 60 Hz screen) alternates
+// one- and two-refresh frames, which reads as judder while the camera moves.
+// `fps` > 0 pins a rate instead (?fps=), timed against the clock.
+export function FrameLimiter({ fps }) {
   const invalidate = useThree((s) => s.invalidate)
   useEffect(() => {
-    // Each frame is due exactly 1/fps after the previous one; we render on the first
-    // display refresh at or after that time, so the average never exceeds the cap.
-    const interval = 1000 / fps
-    let next = 0
     let raf
+    if (fps > 0) {
+      pace.fps = fps
+      // Each frame is due exactly 1/fps after the previous one; we render on the first
+      // display refresh at or after that time, so the average never exceeds the cap.
+      const interval = 1000 / fps
+      let next = 0
+      const tick = (t) => {
+        raf = requestAnimationFrame(tick)
+        if (t >= next) {
+          invalidate()
+          next += interval
+          if (t - next > interval) next = t + interval // fell behind (tab hidden, slow frame): resync
+        }
+      }
+      raf = requestAnimationFrame(tick)
+      return () => cancelAnimationFrame(raf)
+    }
+    // First measure the display's refresh from the gaps between animation frames, with
+    // nothing rendering (the loading screen is still up), over half a second: a low
+    // percentile, so frames held up by loading work don't count, snapped to a standard rate.
+    const gaps = []
+    let last = 0
+    let every = 1
+    let n = 0
     const tick = (t) => {
       raf = requestAnimationFrame(tick)
-      if (t >= next) {
-        invalidate()
-        next += interval
-        if (t - next > interval) next = t + interval // fell behind (tab hidden, slow frame): resync
+      if (gaps.length < 30) {
+        if (last) gaps.push(t - last)
+        last = t
+        if (gaps.length === 30) {
+          const sorted = [...gaps].sort((a, b) => a - b)
+          const hz = 1000 / sorted[Math.floor(sorted.length * 0.2)]
+          const refresh = RATES.reduce((a, b) => (Math.abs(b - hz) < Math.abs(a - hz) ? b : a))
+          every = Math.max(1, Math.ceil(refresh / MAX_FPS - 0.01))
+          pace.fps = refresh / every
+          window.__pace = { refresh, every, fps: pace.fps }
+        }
+        return
       }
+      if (++n % every === 0) invalidate()
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
@@ -26,12 +107,11 @@ export function FrameLimiter({ fps = FPS_CAP }) {
 }
 
 // Adaptive quality. Watches the real interval between rendered frames (the scene renders at
-// FPS_CAP, so anything slower means the GPU can't keep up) over two-second windows:
+// pace.fps, so anything slower means the GPU can't keep up) over two-second windows:
 // - late frames: lower the render resolution in steps (to 85% or 70%), then drop a tier;
 // - on time for a while: raise the resolution back, then try the next tier up (at most one
 //   above the starting guess). A tier that proves too slow is never tried again, so it
 //   settles instead of oscillating.
-const BUDGET = 1000 / FPS_CAP
 const STEP = 0.15
 // On standard-DPI screens a lower render resolution shows as blur, so there it only drops to
 // 85% before the tier goes down; high-DPI screens can go to 70% unnoticed.
@@ -48,6 +128,10 @@ export function Adaptive({ tier, onTier, startTier, baseDpr }) {
     const now = performance.now()
     const dt = now - st.last
     st.last = now
+    if (!warm.done) {
+      st.start = now // count from the end of the warm-up (its frames compile shaders)
+      return
+    }
     // Ignore shader warm-up, tab switches and the settle time after a change.
     // (Slow frames still count: only a hidden tab or a stall over 1.5 s is skipped.)
     if (now - st.start < 4000 || now < st.settleUntil || document.hidden || dt > 1500) return
@@ -65,6 +149,7 @@ export function Adaptive({ tier, onTier, startTier, baseDpr }) {
       setDpr(Math.min(window.devicePixelRatio, baseDpr) * scale)
     }
 
+    const BUDGET = 1000 / pace.fps
     if (avg > BUDGET * 1.3) {
       st.goodSince = 0
       st.settleUntil = now + 2500
@@ -93,5 +178,21 @@ export function Adaptive({ tier, onTier, startTier, baseDpr }) {
       }
     } else st.goodSince = 0
   })
+  return null
+}
+
+// Debug: ?stats=1 exposes per-frame render counts as window.__stats (both renderers).
+export const statsOn = new URLSearchParams(window.location.search).get('stats') === '1'
+export function Stats() {
+  // Count the whole frame (all passes), not just the last render call.
+  useFrame(({ gl }) => {
+    gl.info.autoReset = false
+    gl.info.reset()
+  }, -1000)
+  useFrame(({ gl }) => {
+    window.__gl = gl
+    const r = gl.info.render
+    window.__stats = { triangles: r.triangles, calls: r.drawCalls ?? r.calls, programs: gl.info.programs?.length ?? null }
+  }, 1000)
   return null
 }

@@ -1,15 +1,15 @@
 import * as THREE from 'three'
-import { tier } from '../quality'
 import { track } from '../textureReady'
 
 // Photo-scanned models (CC0, Poly Haven), simplified and packed by tools/simplify-scans.mjs:
 // quantized geometry in public/models/<name>.bin (with ambient occlusion baked per vertex
 // from the full scan) plus their own scanned maps. They ship with the site and are cached by
-// the browser like any other file. The ultra tier gets the denser level (<name>_hi.bin)
-// where there is one, and 2K maps.
-const ULTRA = tier === 'ultra'
-const HI = new Set(['coastal_cliff_01', 'coastal_cliff_02', 'coastal_cliff_04', 'coast_rocks_01', 'coast_rocks_03', 'coast_rocks_05', 'coast_land_rocks_03'])
-const MAPS_2K = new Set([...HI, 'boulder_01'])
+// the browser like any other file. (Denser levels and 2K maps were tried for the ultra tier:
+// at the distances the rocks are seen from they only put several triangles in each pixel.)
+//
+// Scans with a far level of detail (<name>_lo.bin, tools/lod-scans.mjs) for rocks only
+// ever seen from a distance.
+export const HAS_LO = new Set(['rock_07', 'rock_09', 'coast_rocks_05', 'coast_land_rocks_03', 'coast_rocks_01'])
 
 const loader = new THREE.TextureLoader()
 const textures = new Map()
@@ -159,14 +159,18 @@ export function setScanMaterialFactory(fn) {
 
 const cache = new Map()
 // { geometry, material } for a scan; loads once, shared by everything that uses it.
-export function loadScan(name) {
-  if (!cache.has(name)) {
-    const file = ULTRA && HI.has(name) ? `${name}_hi` : name
-    const res = ULTRA && MAPS_2K.has(name) ? `${name}_2k` : name
-    const maps = { map: tex(`${res}_c.webp`, true, true), normal: tex(`${res}_n.webp`), orm: tex(`${res}_orm.webp`) }
-    const p = loadGeometry(file).then((geometry) => ({ geometry, material: factory(maps) }))
+// lod 'lo' gives the far geometry with the same material.
+export function loadScan(name, lod = '') {
+  const key = lod ? `${name}_${lod}` : name
+  if (!cache.has(key)) {
+    let p
+    if (lod) p = Promise.all([loadGeometry(key), loadScan(name)]).then(([geometry, base]) => ({ geometry, material: base.material }))
+    else {
+      const maps = { map: tex(`${name}_c.webp`, true, true), normal: tex(`${name}_n.webp`), orm: tex(`${name}_orm.webp`) }
+      p = loadGeometry(name).then((geometry) => ({ geometry, material: factory(maps) }))
+    }
     track(p)
-    cache.set(name, p)
+    cache.set(key, p)
   }
-  return cache.get(name)
+  return cache.get(key)
 }

@@ -105,3 +105,11 @@ export const color = c
 
 // Objects skipped in the water reflection pass (too costly, barely visible there).
 export const hideInReflection = new Set()
+// Skipped there on every tier: what stands on the field behind the shore (grass, beds, the
+// piano, the shore plants), which the mirrored view, looking up and away from the cameras,
+// can never see (only the spit runs out into the sea), yet cost as much to draw there as on
+// screen. Layer NEVER_REFLECTED: the main cameras and the pointer raycaster have it, the
+// reflection cameras don't. The WebGL grass and beds use the set instead (hidden around the
+// reflection render), since they must stay in the piano's environment capture there.
+export const NEVER_REFLECTED = 3
+export const neverReflected = new Set()

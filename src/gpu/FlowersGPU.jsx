@@ -34,7 +34,7 @@ import { scatter, seeded, stemGeometry } from '../scene/FieldFlowers'
 import { BOX_MIN, BOX_SIZE } from '../scene/Petals'
 import { lilyGeometry, toInstanced } from '../scene/flower'
 import { color } from '../scene/world'
-import { REFLECTION_HIDDEN } from './SeaGPU'
+import { NEVER_REFLECTED, REFLECTION_HIDDEN } from './SeaGPU'
 import { applyFog, hash12, spow, u, viewNormal, vnoise } from './tsl'
 
 // Planted lilies and bells, and the floating flowers, on the WebGPU path. Same geometry,
@@ -220,7 +220,8 @@ export function FieldFlowersGPU() {
         g.instanceCount = list.length
         g.boundingSphere = sphere
       }
-      return { heads, stems }
+      // Off the spit, the mirrored view can't see them (see NEVER_REFLECTED).
+      return { heads, stems, layer: sphere.center.z > -12 ? NEVER_REFLECTED : REFLECTION_HIDDEN }
     })
   }, [])
   const materials = useMemo(() => ({ head: headMaterial(), stem: stemMaterial() }), [])
@@ -229,8 +230,8 @@ export function FieldFlowersGPU() {
     <group>
       {groups.map((g, i) => (
         <group key={i}>
-          <mesh geometry={g.stems} material={materials.stem} layers={REFLECTION_HIDDEN} />
-          <mesh geometry={g.heads} material={materials.head} layers={REFLECTION_HIDDEN} />
+          <mesh geometry={g.stems} material={materials.stem} layers={g.layer} />
+          <mesh geometry={g.heads} material={materials.head} layers={g.layer} />
         </group>
       ))}
     </group>

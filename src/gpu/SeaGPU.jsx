@@ -27,7 +27,7 @@ import {
   texture,
 } from 'three/tsl'
 import { LANES, LANE_DIR } from '../scene/sunLanes'
-import { color, palette } from '../scene/world'
+import { NEVER_REFLECTED, color, palette } from '../scene/world'
 import { surface } from './textures'
 import { applyFog, foamShadeAt, landDist, seabedY, spow, swash, u, viewNormal, vnoise, voronoi2 } from './tsl'
 
@@ -40,6 +40,7 @@ const c = (hex) => vec3(...color(hex).toArray())
 // its surroundings (a reflection pass nested inside a cube capture breaks the reflector).
 export const seaSwap = { mesh: null, plain: null }
 export const REFLECTION_HIDDEN = 2 // layer for objects the reflection skips (grass, flowers)
+export { NEVER_REFLECTED } // layer skipped on every tier (see scene/world.js)
 
 // One travelling sine wave (deep-water dispersion): returns (height, d/dx, d/dz) * amp.
 function wave(p, dir, len, amp, t) {
@@ -218,6 +219,7 @@ export default function SeaGPU({ reflection = 0, reflectAll = false }) {
         const v = get(cam)
         if (reflectAll) v.layers.enable(REFLECTION_HIDDEN)
         else v.layers.disable(REFLECTION_HIDDEN)
+        v.layers.disable(NEVER_REFLECTED)
         return v
       }
     }

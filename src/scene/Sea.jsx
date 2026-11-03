@@ -5,7 +5,7 @@ import { Reflector } from 'three/examples/jsm/objects/Reflector.js'
 import { fogGLSL, noiseGLSL, shoreGLSL, swashGLSL } from './glsl'
 import { surfaceUniforms } from './surfaces'
 import { sunLanesGLSL } from './sunLanes'
-import { color, hideInReflection, palette, shared } from './world'
+import { color, hideInReflection, neverReflected, palette, shared } from './world'
 
 const SEA_LEVEL = -0.04
 
@@ -237,7 +237,9 @@ export default function Sea({ reflection = 0, reflectAll = false }) {
       const render = m.onBeforeRender
       m.onBeforeRender = function (...args) {
         if (!reflectAll) hideInReflection.forEach((o) => (o.visible = false))
+        neverReflected.forEach((o) => (o.visible = false))
         render.apply(this, args)
+        neverReflected.forEach((o) => (o.visible = true))
         if (!reflectAll) hideInReflection.forEach((o) => (o.visible = true))
       }
     } else {
