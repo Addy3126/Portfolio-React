@@ -138,79 +138,131 @@ const blocked = (x, z) =>
   Math.hypot(x + 1.5, z - 10.8) < 1.8 ||
   z > 7.2
 
+// Lily stems are 40% shorter than they were (the grass was halved), and there are twice as
+// many lilies, except in the farthest bed out on the spit, which keeps its old look.
+const LILY_STEM = 0.6
+const LILY_COUNT = 2
+const FAR_BED = 2
+
+// Natural scatter: candidates come from sample(); each is kept with the probability given by
+// density(x, z) (0..1) and only if no flower already stands closer than a spacing that
+// shrinks where the density is high. Gives drifts and gaps instead of even sprinkling or
+// tight balls, and no two flowers on top of each other.
+function naturalScatter(rand, count, sample, density, spacing) {
+  const out = []
+  const cell = spacing
+  const grid = new Map()
+  const key = (i, j) => i * 73856093 + j * 19349663
+  for (let tries = 0; out.length < count && tries < count * 60; tries++) {
+    const [x, z] = sample()
+    const d = density(x, z)
+    if (d <= 0 || rand() > d) continue
+    const minD = spacing * (1.5 - 0.8 * d)
+    const ci = Math.floor(x / cell)
+    const cj = Math.floor(z / cell)
+    let ok = true
+    const reach = Math.ceil(minD / cell)
+    for (let di = -reach; di <= reach && ok; di++)
+      for (let dj = -reach; dj <= reach && ok; dj++)
+        for (const [px, pz] of grid.get(key(ci + di, cj + dj)) || []) if (Math.hypot(px - x, pz - z) < minD) ok = false
+    if (!ok) continue
+    const k = key(ci, cj)
+    if (!grid.has(k)) grid.set(k, [])
+    grid.get(k).push([x, z])
+    out.push([x, z, d])
+  }
+  return out
+}
+
+// Smooth patchiness for drifts (value noise on a coarse grid).
+function patchNoise(x, z, seed) {
+  const h = (i, j) => {
+    const v = Math.sin(i * 127.1 + j * 311.7 + seed * 74.7) * 43758.5453
+    return v - Math.floor(v)
+  }
+  const xi = Math.floor(x)
+  const zi = Math.floor(z)
+  const fx = x - xi
+  const fz = z - zi
+  const u = fx * fx * (3 - 2 * fx)
+  const v = fz * fz * (3 - 2 * fz)
+  return h(xi, zi) * (1 - u) * (1 - v) + h(xi + 1, zi) * u * (1 - v) + h(xi, zi + 1) * (1 - u) * v + h(xi + 1, zi + 1) * u * v
+}
+
+function flower(rand, x, z, kind, stemScale, group) {
+  const leanAng = rand() * Math.PI * 2
+  const lean = (kind ? 0.06 : 0.08) * rand()
+  return {
+    group,
+    base: [x, 0, z],
+    params: [
+      rand() * Math.PI * 2,
+      (kind ? 0.22 + rand() * 0.26 : 0.48 + rand() * 0.3) * stemScale,
+      kind ? 0.05 + rand() * 0.025 : 0.11 + rand() * 0.06,
+      kind,
+    ],
+    lean: [Math.cos(leanAng) * lean, Math.sin(leanAng) * lean, kind ? 0.5 + rand() * 0.5 : 0.15 + rand() * 0.45, rand()],
+  }
+}
+
 export function scatter(rand) {
   const items = []
-  const addClusters = (clusters, perMin, perMax, kind) => {
-    for (let c = 0; c < clusters; c++) {
-      let cx
-      let cz
-      for (let tries = 0; tries < 30; tries++) {
-        const ang = rand() * Math.PI * 2
-        const rad = 1.4 + Math.pow(rand(), 0.8) * 3.6
-        cx = PIANO_CENTRE.x + Math.cos(ang) * rad * 1.15
-        cz = PIANO_CENTRE.y + Math.sin(ang) * rad * 0.85
-        if (!blocked(cx, cz)) break
-      }
-      const n = perMin + Math.floor(rand() * (perMax - perMin + 1))
-      for (let i = 0; i < n; i++) {
-        const x = cx + (rand() - 0.5) * (kind ? 0.9 : 0.7)
-        const z = cz + (rand() - 0.5) * (kind ? 0.9 : 0.7)
-        if (blocked(x, z)) continue
-        const leanAng = rand() * Math.PI * 2
-        const lean = (kind ? 0.06 : 0.08) * rand()
-        items.push({
-          base: [x, 0, z],
-          params: [
-            rand() * Math.PI * 2,
-            kind ? 0.22 + rand() * 0.26 : 0.48 + rand() * 0.3,
-            kind ? 0.05 + rand() * 0.025 : 0.11 + rand() * 0.06,
-            kind,
-          ],
-          lean: [Math.cos(leanAng) * lean, Math.sin(leanAng) * lean, kind ? 0.5 + rand() * 0.5 : 0.15 + rand() * 0.45, rand()],
-        })
-      }
-    }
-  }
-  addClusters(16, 2, 5, 0) // dark lilies
-  addClusters(20, 4, 8, 1) // small glowing bells
 
-  // Lily beds: loose, irregular patches, denser in the middle and ragged at the edges.
-  // `short` is for flowers growing out of sand (shorter stems).
-  let group = -1
-  const addBed = (cx, cz, rx, rz, lilies, bells, short = false) => {
-    const add = (kind, count) => {
-      let placed = 0
-      for (let tries = 0; placed < count && tries < count * 20; tries++) {
-        // Points pulled toward the centre (sqrt bias reversed) with a wobbly outline.
-        const a = rand() * Math.PI * 2
-        const r = Math.pow(rand(), 0.6) * (0.8 + 0.3 * Math.sin(a * 3 + cx) + 0.12 * Math.sin(a * 7 + cz))
-        const x = cx + Math.cos(a) * r * rx
-        const z = cz + Math.sin(a) * r * rz
-        if (blocked(x, z) || landDist(x, z) < 1.2 || Math.hypot(x - 31, z + 38) < 1.6) continue
-        const leanAng = rand() * Math.PI * 2
-        const lean = (kind ? 0.06 : 0.08) * rand()
-        // Taller in the middle of the bed, shorter toward its edge, like a real planting.
-        const h = (short ? 0.65 : 1) * (1.1 - 0.35 * r)
-        items.push({
-          group,
-          base: [x, 0, z],
-          params: [
-            rand() * Math.PI * 2,
-            (kind ? 0.2 + rand() * 0.22 : 0.42 + rand() * 0.3) * h,
-            kind ? 0.05 + rand() * 0.025 : 0.11 + rand() * 0.06,
-            kind,
-          ],
-          lean: [Math.cos(leanAng) * lean, Math.sin(leanAng) * lean, kind ? 0.5 + rand() * 0.5 : 0.15 + rand() * 0.45, rand()],
-        })
-        placed++
+  // Round the piano: drifts in a loose ring (thicker toward the back and sides, thinning
+  // toward the cameras), shaped by patch noise so some stretches are dense and others bare.
+  const around = (kind, count, spacing, seed) =>
+    naturalScatter(
+      rand,
+      count,
+      () => {
+        const ang = rand() * Math.PI * 2
+        const rad = 1.2 + Math.sqrt(rand()) * 4.6
+        return [PIANO_CENTRE.x + Math.cos(ang) * rad * 1.15, PIANO_CENTRE.y + Math.sin(ang) * rad * 0.85]
+      },
+      (x, z) => {
+        if (blocked(x, z) || landDist(x, z) < 1.5) return 0
+        const r = Math.hypot((x - PIANO_CENTRE.x) / 1.15, (z - PIANO_CENTRE.y) / 0.85)
+        const ring = Math.min(1, (r - 1.1) / 0.8) * (1 - Math.max(0, (r - 4.4) / 1.4))
+        const drift = Math.max(0, (patchNoise(x * 0.9, z * 0.9, seed) - 0.35) / 0.45)
+        return Math.max(0, ring) * Math.min(1, drift)
+      },
+      spacing,
+    )
+  for (const [x, z] of around(0, 56 * LILY_COUNT, 0.16, 3)) items.push(flower(rand, x, z, 0, LILY_STEM, -1))
+  for (const [x, z] of around(1, 120, 0.12, 7)) items.push(flower(rand, x, z, 1, 0.75, -1))
+
+  // Lily beds: irregular patches with a wobbly outline, densest in the middle, with drifts
+  // and gaps inside, taller toward the middle like a real planting. `short` is for flowers
+  // growing out of sand (shorter stems).
+  BEDS.forEach(([cx, cz, rx, rz, lilies, bells, short], group) => {
+    const far = group === FAR_BED
+    const sample = () => {
+      const a = rand() * Math.PI * 2
+      const r = Math.sqrt(rand()) * 1.5
+      return [cx + Math.cos(a) * r * rx, cz + Math.sin(a) * r * rz]
+    }
+    const rel = (x, z) => {
+      const a = Math.atan2((z - cz) / rz, (x - cx) / rx)
+      const edge = 0.85 + 0.22 * Math.sin(a * 3 + cx) + 0.1 * Math.sin(a * 7 + cz)
+      return Math.hypot((x - cx) / rx, (z - cz) / rz) / edge
+    }
+    const density = (x, z) => {
+      if (blocked(x, z) || landDist(x, z) < 1.2 || Math.hypot(x - 31, z + 38) < 1.6) return 0
+      const r = rel(x, z)
+      if (r > 1.45) return 0
+      // Dense core, a soft rim, then a few stragglers seeded beyond the edge.
+      const core = r < 1 ? 1 - 0.75 * Math.pow(r, 2.0) : 0.25 * (1 - (r - 1) / 0.45)
+      return core * (0.4 + 0.6 * patchNoise(x * 1.3, z * 1.3, group + 11))
+    }
+    const add = (kind, count, stem, spacing) => {
+      for (const [x, z] of naturalScatter(rand, count, sample, density, spacing)) {
+        // Taller toward the middle, with plenty of variation so the tops don't form a lid.
+        const h = (short ? 0.65 : 1) * (1.1 - 0.4 * Math.min(1, rel(x, z))) * (0.7 + rand() * 0.6)
+        items.push(flower(rand, x, z, kind, h * stem, group))
       }
     }
-    add(0, lilies)
-    add(1, bells)
-  }
-  BEDS.forEach(([cx, cz, rx, rz, lilies, bells, short], i) => {
-    group = i
-    addBed(cx, cz, rx, rz, lilies, bells, short)
+    add(0, far ? lilies : lilies * LILY_COUNT, far ? 1 : LILY_STEM, far ? 0.15 : 0.095)
+    add(1, bells, far ? 1 : 0.75, 0.1)
   })
   return items
 }
