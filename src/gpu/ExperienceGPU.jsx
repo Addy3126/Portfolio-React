@@ -9,6 +9,8 @@ import Piano from '../scene/Piano'
 import ShorePlants from '../scene/ShorePlants'
 import Life from '../scene/Life'
 import ScannedRocks from '../scene/ScannedRocks'
+import FillLight from '../scene/FillLight'
+import './scanMaterial'
 import { Adaptive, FrameLimiter } from '../scene/Perf'
 import { SUN_DIR, shared } from '../scene/world'
 import EffectsGPU from './EffectsGPU'
@@ -114,6 +116,7 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       className="scene"
       frameloop={debug.fps === 0 ? 'always' : 'demand'}
       dpr={q.dpr}
+      shadows={q.rockShadows > 0}
       camera={{ fov: 42, near: 0.1, far: 3000, position: [0, 1, 9] }}
       gl={gl}
       onCreated={({ gl, camera, scene }) => {
@@ -133,9 +136,9 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       {debug.shadow && <BeachShadowGPU />}
 
       {/* Ground colour: light bounced up from the lavender field onto the piano. */}
-      <hemisphereLight args={['#8f86c8', '#2c2a6c', 1.2]} />
+      <hemisphereLight args={['#8f86c8', '#2c2a6c', 0.8]} />
       <directionalLight position={SUN_DIR.clone().multiplyScalar(100)} color="#f5c8d0" intensity={2.2} />
-      <directionalLight position={[-6, 4, 12]} color="#8a8fe0" intensity={0.9} />
+      <FillLight shadowSize={q.rockShadows} />
       <pointLight position={[-1.45, 0.35, 4.3]} color="#6f9bff" intensity={1.4} distance={4} decay={2} />
 
       <SkyGPU />

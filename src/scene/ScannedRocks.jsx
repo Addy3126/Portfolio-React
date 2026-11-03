@@ -21,31 +21,43 @@ export const HEADLAND_SCANS = [
   ['coastal_cliff_02', 170, -233, 1.0, 1.6, -0.5, -4],
 ]
 
+// A cluster of smaller rocks and debris round a point: a few mid-size rocks leaning on each
+// other, then smaller stones spilling outward, so formations sit in their own rubble
+// instead of standing alone. side: angle (radians) the spill favours; spread: metres.
+function cluster(list, rand, x, z, { count = 8, spread = 6, side = Math.PI / 2, arc = Math.PI * 1.2, size = 1, base = -0.6 }) {
+  for (let i = 0; i < count; i++) {
+    const a = side - arc / 2 + rand() * arc
+    const r = spread * Math.pow(rand(), 0.7)
+    const near = 1 - r / spread // bigger pieces close in, smaller spilling out
+    const px = x + Math.cos(a) * r
+    const pz = z + Math.sin(a) * r * 0.6
+    const k = rand()
+    if (k < 0.35) list.push(['coast_rocks_05', px, pz, size * (0.35 + near * 0.7) * (0.7 + rand() * 0.6), size * (0.7 + rand() * 0.8), rand() * 6.28, base])
+    else if (k < 0.55) list.push(['coast_land_rocks_03', px, pz, size * (0.2 + near * 0.35), size * (0.8 + rand() * 0.8), rand() * 6.28, base])
+    else list.push([rand() < 0.5 ? 'rock_07' : 'rock_09', px, pz, size * (3 + near * 7) * (0.7 + rand() * 0.6), size * (3 + near * 6), rand() * 6.28, base - 0.1])
+  }
+}
+
 function placements() {
   const rand = seeded(4242)
   const list = []
-  // Fallen rocks along the foot of the cliffs.
+  // The headland's foot: scanned shore-rock shelves merge the cliffs into the sea, with
+  // fallen rocks and debris heaped along the seaward side.
+  list.push(['coast_rocks_01', 205, -222, 0.55, 1.4, 0.3, -2.2])
+  list.push(['coast_rocks_01', 248, -250, 0.45, 1.2, 2.4, -2.2])
   for (const [, x, z] of HEADLAND_SCANS) {
-    for (let i = 0; i < 6; i++) {
-      const a = Math.PI * 0.55 + rand() * Math.PI * 0.9 // the seaward (camera) side
-      const r = 18 + rand() * 22
-      const big = rand() < 0.4
-      list.push([big ? 'coast_land_rocks_03' : 'coast_rocks_05', x + Math.cos(a) * r, z + Math.sin(a) * r * 0.5, big ? 0.9 + rand() * 0.6 : 0.8 + rand() * 0.8, big ? 1.2 + rand() * 0.8 : 1 + rand() * 0.8, rand() * 6.28, -1.2])
-    }
+    cluster(list, rand, x - 12, z + 16, { count: 10, spread: 16, size: 1.2, base: -1.0 })
+    cluster(list, rand, x + 14, z + 14, { count: 8, spread: 12, size: 1.0, base: -1.0 })
   }
   // Rubble round each tower base in the sea.
-  for (const t of TOWERS) {
-    const n = 2 + Math.floor(rand() * 3)
-    for (let i = 0; i < n; i++) {
-      const a = rand() * Math.PI * 2
-      const r = Math.max(t.w, t.d) * (0.6 + rand() * 0.45)
-      list.push(['coast_rocks_05', t.x + Math.cos(a) * r, t.z + Math.sin(a) * r, 0.35 + rand() * 0.5, 0.6 + rand() * 0.6, rand() * 6.28, -0.6])
-    }
-  }
-  // The spit's rocky end: a low shelf of shore rock running into the sea.
+  for (const t of TOWERS) cluster(list, rand, t.x, t.z + Math.max(t.w, t.d) * 0.5, { count: 4, spread: Math.max(t.w, t.d) * 0.9, size: 0.55, arc: Math.PI * 2, base: -0.6 })
+  // The spit's rocky end: a low shelf of shore rock running into the sea, boulders and
+  // debris round it.
   const [ex, ez] = spitPoint(1)
   list.push(['coast_rocks_03', ex + 1.5, ez - 5, 0.32, 0.55, 0.7, -0.9])
-  // Boulders where the cameras come close: along the beach and out on the spit.
+  cluster(list, rand, ex - 1, ez - 1, { count: 9, spread: 5, size: 0.45, arc: Math.PI * 2, base: -0.3 })
+  // Boulders where the cameras come close: along the beach and out on the spit, each with
+  // a few stones bedded round it.
   const [s1x, s1z] = spitPoint(0.62)
   const [s2x, s2z] = spitPoint(0.86)
   for (const [x, z, s, ry] of [
@@ -55,8 +67,14 @@ function placements() {
     [s1x + 5.5, s1z + 1.0, 1.4, 1.1],
     [s2x - 4.5, s2z - 0.5, 1.15, 5.2],
     [s2x + 3.2, s2z - 2.4, 1.6, 3.3],
-  ])
+  ]) {
     list.push(['boulder_01', x, z, s, s * (0.75 + (ry % 1) * 0.3), ry, -0.25 * s])
+    for (let i = 0; i < 4; i++) {
+      const a = rand() * Math.PI * 2
+      const r = s * (0.9 + rand() * 0.8)
+      list.push([rand() < 0.5 ? 'rock_07' : 'rock_09', x + Math.cos(a) * r, z + Math.sin(a) * r, s * (1.4 + rand() * 1.6), s * (1.2 + rand() * 1.4), rand() * 6.28, -0.06])
+    }
+  }
   return list
 }
 
@@ -73,12 +91,16 @@ function placeMatrix(box, [, x, z, sh, sv, ry, baseY]) {
 }
 
 // The headland meshes, for Ruins to raycast the ground height of the buildings on top.
+// Bumped when the rocks have mounted, so the static rock shadows are rendered again.
+export const rocksVersion = { value: 0 }
+
 let headlandPromise = null
 export function headlandMeshes() {
   headlandPromise ??= Promise.all(
     HEADLAND_SCANS.map(async (p) => {
       const { geometry, material } = await loadScan(p[0])
       const mesh = new THREE.Mesh(geometry, material)
+      mesh.castShadow = mesh.receiveShadow = true
       mesh.matrixAutoUpdate = false
       mesh.matrix.copy(placeMatrix(geometry.boundingBox, p))
       mesh.matrixWorld.copy(mesh.matrix)
@@ -112,11 +134,15 @@ export default function ScannedRocks() {
           const mesh = new THREE.InstancedMesh(geometry, material, items.length)
           items.forEach((p, i) => mesh.setMatrixAt(i, placeMatrix(geometry.boundingBox, p)))
           mesh.computeBoundingSphere()
+          mesh.castShadow = mesh.receiveShadow = true
           mesh.layers.enable(BEACH_LAYER) // casts into the baked beach shadows
           return mesh
         }),
       )
-      if (live) setObjects([...headland, ...groups])
+      if (live) {
+        setObjects([...headland, ...groups])
+        rocksVersion.value++
+      }
     })()
     return () => {
       live = false
