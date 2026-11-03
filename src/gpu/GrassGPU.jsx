@@ -29,7 +29,7 @@ import { FIELD, FOLD_BELOW, TILE, bladeTemplate, buildTile, seeded } from '../sc
 import { color, palette, shared } from '../scene/world'
 import { REFLECTION_HIDDEN } from './SeaGPU'
 import { pianoShadow } from './shadow'
-import { applyFog, spow, u, viewNormal, vnoise } from './tsl'
+import { applyFog, spow, u, viewNormal, vnoise, pianoRipple } from './tsl'
 
 // The grass field on the WebGPU path: the same tiles, blades and shading as the WebGL
 // grass (Bezier blades with wind, clumps, patches, edge-on widening, cursor parting,
@@ -198,6 +198,7 @@ function makeMaterial(hi, fadeFar = true) {
     // Blue spill from the piano.
     const pd = length(W.xz.sub(u.pianoPos.xz))
     col.addAssign(u.pianoGlow.mul(u.glowPulse).mul(tt.add(0.2)).mul(0.5).div(pd.mul(pd).mul(0.9).add(1.0)))
+    col.addAssign(u.pianoGlow.mul(pianoRipple(pd)).mul(tt.add(0.25)).mul(0.7))
     return applyFog(col, dist, V)
   })()
   return m

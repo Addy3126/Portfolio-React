@@ -11,6 +11,7 @@ import Life from '../scene/Life'
 import ScannedRocks from '../scene/ScannedRocks'
 import FillLight from '../scene/FillLight'
 import './scanMaterial'
+import PlayEffects from '../scene/PlayEffects'
 import { Adaptive, FrameLimiter } from '../scene/Perf'
 import { SUN_DIR, shared } from '../scene/world'
 import EffectsGPU from './EffectsGPU'
@@ -153,6 +154,7 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       <RuinsGPU hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano captureEnv={captureEnvGPU} />
       {debug.life && <Life />}
+      <PlayEffects />
 
       <EffectsGPU godRays={q.godRays && debug.godRays} gradeOn={debug.grade} ao={q.ao && debug.ao} aoFull={tier === 'ultra'} contact={q.contact && debug.contact} flare={debug.flare} />
     </Canvas>

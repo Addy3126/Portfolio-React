@@ -12,6 +12,7 @@ import Ground from './Ground'
 import Life from './Life'
 import ScannedRocks from './ScannedRocks'
 import FillLight from './FillLight'
+import PlayEffects from './PlayEffects'
 import { Adaptive, FrameLimiter } from './Perf'
 import Petals from './Petals'
 import Piano from './Piano'
@@ -94,6 +95,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       <Ruins hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano />
       {debug.life && <Life />}
+      <PlayEffects />
 
       <Effects godRays={q.godRays && debug.godRays} ao={q.ao && debug.ao} contact={q.contact && debug.contact} flare={debug.flare} grade={debug.grade} tm={debug.tm} sanitize={debug.sanitize} msaaOverride={debug.msaa} />
     </Canvas>

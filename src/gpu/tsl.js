@@ -43,6 +43,8 @@ export const u = {
   grassHi: uniform(0),
   cursor: uniform(shared.uCursor.value),
   cursorStrength: uniform(0),
+  rippleT: uniform(shared.uRippleT.value),
+  rippleA: uniform(shared.uRippleA.value),
 }
 export function sync() {
   u.time.value = shared.uTime.value
@@ -259,3 +261,11 @@ export const fbm3g = Fn(([p0]) => {
 // A world-space normal in view space, for material.normalNode (read by the AO pass's
 // normal buffer; the scene's own shading works in world space).
 export const viewNormal = (Nw) => normalize(cameraViewMatrix.mul(v4(Nw, 0.0)).xyz)
+
+// Rings of light spreading from the piano when it is played (as rippleGLSL).
+export const pianoRipple = Fn(([d]) => {
+  const age = max(vec4(u.time).sub(u.rippleT), vec4(0.0))
+  const off = vec4(d).sub(age.mul(3.2))
+  const band = exp(off.mul(off).div(-0.18)).mul(exp(age.mul(-0.85))).mul(u.rippleA)
+  return band.x.add(band.y).add(band.z).add(band.w)
+})

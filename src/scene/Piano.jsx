@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
+import { BLACK_MIDI, WHITE_MIDI, keys, noteOff, noteOn, piano } from '../piano/engine'
 import { SHADOW_LAYER } from './PianoShadow'
 import Bench from './piano/Bench'
 import { design } from './piano/designs'
@@ -310,12 +311,16 @@ function buildPiano(d, mats) {
   // with a sloped front), as real sharps are.
   const whites = []
   for (let i = 0; i < 52; i++) whites.push([-0.105, 0.766, KEY_Z0 + (i + 0.5) * KEY_W])
-  parts.push(instanced(new RoundedBoxGeometry(0.148, 0.02, KEY_W - 0.0012, 2, 0.0028), mats.ivory, whites))
+  const whiteMesh = instanced(new RoundedBoxGeometry(0.148, 0.02, KEY_W - 0.0012, 2, 0.0028), mats.ivory, whites)
+  whiteMesh.userData.keys = { kind: 'white', points: whites }
+  parts.push(whiteMesh)
   const blacks = []
   for (let i = 0; i < 51; i++) {
     if ('ACDFG'.includes('ABCDEFG'[i % 7])) blacks.push([-0.064, 0.783, KEY_Z0 + (i + 1) * KEY_W])
   }
-  parts.push(instanced(blackKeyGeometry(), mats.ebony, blacks))
+  const blackMesh = instanced(blackKeyGeometry(), mats.ebony, blacks)
+  blackMesh.userData.keys = { kind: 'black', points: blacks }
+  parts.push(blackMesh)
   add(new THREE.BoxGeometry(0.006, 0.007, 1.24), mats.redFelt, [-0.026, 0.779, 0])
   add(new THREE.BoxGeometry(0.045, 0.1, 1.25), mats.lacquer, [0.005, 0.81, 0], [0, 0, 0.18])
   const cheek = new THREE.Shape()
@@ -473,7 +478,8 @@ function buildPiano(d, mats) {
   add(new THREE.BoxGeometry(0.12, 0.06, 0.24), mats.lacquer, [0.25, 0.07, 0])
   // Pedals: brass, a narrow shank widening to a rounded foot, with a rod up into the box.
   for (const z of [-0.065, 0, 0.065]) {
-    add(pedalGeometry(), mats.brass, [0.2, 0.058, z], [0, 0, 0.12])
+    const pedal = add(pedalGeometry(), mats.brass, [0.2, 0.058, z], [0, 0, 0.12])
+    if (z > 0) pedal.userData.sustainPedal = true // the right pedal, on the player's right
     add(new THREE.CylinderGeometry(0.004, 0.004, 0.05, 8), mats.brass, [0.27, 0.085, z])
   }
 
@@ -500,6 +506,107 @@ function captureEnvGL(gl, scene, at) {
   return env
 }
 
+// Playable keys: each key dips about a pivot at its back end when held and springs back,
+// with a blue glow plate over it that flares on the strike and fades; the right pedal goes
+// down with the sustain. Clicking or tapping a key plays it (and dragging across keys plays
+// a glissando) while in play mode.
+const PRESS = { white: { pivot: 0.074, angle: 0.068, top: 0.0105, len: 0.148, wid: KEY_W - 0.004 }, black: { pivot: 0.046, angle: 0.08, top: 0.0085, len: 0.088, wid: 0.0095 } }
+const GLOW = new THREE.Color(0.35, 0.6, 1.6)
+function usePlayableKeys(parts) {
+  const state = useMemo(() => {
+    const white = parts.find((p) => p.userData.keys?.kind === 'white')
+    const black = parts.find((p) => p.userData.keys?.kind === 'black')
+    const rows = [
+      ...white.userData.keys.points.map((pt, i) => ({ mesh: white, i, pt, midi: WHITE_MIDI[i], k: PRESS.white })),
+      ...black.userData.keys.points.map((pt, i) => ({ mesh: black, i, pt, midi: BLACK_MIDI[i], k: PRESS.black })),
+    ]
+    const glowMesh = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({ color: 'white', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }),
+      rows.length,
+    )
+    glowMesh.raycast = () => {} // clicks go to the keys underneath
+    glowMesh.frustumCulled = false
+    rows.forEach((r, j) => glowMesh.setColorAt(j, new THREE.Color(0, 0, 0)))
+    const pedal = parts.find((p) => p.userData.sustainPedal)
+    return { rows, glowMesh, depth: new Float32Array(rows.length).fill(-1), pedal, pedalRest: pedal?.rotation.z ?? 0 }
+  }, [parts])
+
+  const m4 = useMemo(() => new THREE.Matrix4(), [])
+  const tmp = useMemo(() => ({ t: new THREE.Matrix4(), r: new THREE.Matrix4(), c: new THREE.Color() }), [])
+  useFrame((_, dt) => {
+    const d = Math.min(dt, 0.1)
+    let dirty = false
+    keys.energy *= Math.exp(-d * 2.5)
+    state.rows.forEach((r, j) => {
+      const target = keys.down[r.midi] ? 1 : 0
+      const cur = state.depth[j]
+      const next = cur < 0 ? target : cur + (target - cur) * (1 - Math.exp(-d * (target > cur ? 60 : 22)))
+      if (keys.down[r.midi]) keys.glow[r.midi] = Math.max(keys.glow[r.midi], 0.55)
+      else keys.glow[r.midi] *= Math.exp(-d * 3.2)
+      const g = keys.glow[r.midi] < 0.003 ? 0 : keys.glow[r.midi]
+      if (Math.abs(next - cur) < 1e-4 && g === 0 && cur >= 0 && !r.lit) return
+      state.depth[j] = next
+      r.lit = g > 0
+      // Key: translate to its place, rotate about the back pivot.
+      const a = next * r.k.angle
+      m4.makeTranslation(r.pt[0], r.pt[1], r.pt[2])
+      m4.multiply(tmp.t.makeTranslation(r.k.pivot, 0, 0)).multiply(tmp.r.makeRotationZ(a)).multiply(tmp.t.makeTranslation(-r.k.pivot, 0, 0))
+      r.mesh.setMatrixAt(r.i, m4)
+      r.mesh.instanceMatrix.needsUpdate = true
+      // Glow plate on its top face (moves with it).
+      const plate = m4.clone().multiply(tmp.t.makeTranslation(0, r.k.top, 0)).multiply(tmp.r.makeScale(r.k.len, 0.002, r.k.wid))
+      state.glowMesh.setMatrixAt(j, plate)
+      state.glowMesh.setColorAt(j, tmp.c.copy(GLOW).multiplyScalar(g * (r.k === PRESS.black ? 1.6 : 1)))
+      dirty = true
+    })
+    if (dirty) {
+      state.glowMesh.instanceMatrix.needsUpdate = true
+      state.glowMesh.instanceColor.needsUpdate = true
+    }
+    if (state.pedal) {
+      const want = state.pedalRest + (piano.sustain ? 0.11 : 0)
+      state.pedal.rotation.z += (want - state.pedal.rotation.z) * (1 - Math.exp(-d * 18))
+    }
+  })
+
+  const pointer = useRef({ midi: null })
+  useEffect(() => {
+    const up = () => {
+      if (pointer.current.midi !== null) noteOff(pointer.current.midi)
+      pointer.current.midi = null
+    }
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+    return () => {
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+    }
+  }, [])
+  const midiOf = (kind, id) => (kind === 'white' ? WHITE_MIDI : BLACK_MIDI)[id]
+  const handlers = (kind) => ({
+    onPointerDown: (e) => {
+      if (!piano.playing || e.instanceId === undefined) return
+      e.stopPropagation()
+      const m = midiOf(kind, e.instanceId)
+      pointer.current.midi = m
+      noteOn(m, 0.62 + Math.random() * 0.12) // a little variation, like a real touch
+    },
+    onPointerMove: (e) => {
+      const p = pointer.current
+      if (!piano.playing || p.midi === null || e.instanceId === undefined) return
+      e.stopPropagation()
+      const m = midiOf(kind, e.instanceId)
+      if (m !== p.midi) {
+        noteOff(p.midi)
+        noteOn(m, 0.6)
+        p.midi = m
+      }
+    },
+  })
+  return { glowMesh: state.glowMesh, handlers }
+}
+
 export default function Piano({ captureEnv }) {
   const mats = useMemo(() => pianoMaterials(design), [])
   const parts = useMemo(() => {
@@ -518,9 +625,12 @@ export default function Piano({ captureEnv }) {
 
   useFrame(() => {
     if (!design.glow) return
-    const p = shared.uGlowPulse.value
+    // The inlay also swells with what's being played.
+    const p = shared.uGlowPulse.value * (1 + keys.energy * 0.9)
     mats.glow.color.setRGB(0.35 * p * 2.2, 0.55 * p * 2.2, 1.6 * p * 2.2)
   })
+
+  const playable = usePlayableKeys(parts)
 
   const group = useRef()
 
@@ -552,10 +662,11 @@ export default function Piano({ captureEnv }) {
 
   return (
     <group ref={group} position={PIANO_POS}>
-      {parts.map((p, i) => (
-        <primitive key={i} object={p} />
-      ))}
+      {parts.map((p, i) =>
+        p.userData.keys ? <primitive key={i} object={p} {...playable.handlers(p.userData.keys.kind)} /> : <primitive key={i} object={p} />,
+      )}
       <Bench design={design} lacquer={mats.lacquer} brass={mats.brass} glow={mats.glow} />
+      <primitive object={playable.glowMesh} />
     </group>
   )
 }
