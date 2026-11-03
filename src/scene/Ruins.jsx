@@ -1,8 +1,8 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { fogGLSL } from './glsl'
-import { headlandTopAt } from './Rocks'
+import { headlandTopFn } from './ScannedRocks'
 import { buildTower, buildingMaterial } from './ruins/buildings'
 import { HEADLAND_BUILDINGS, PLATEAU_BUILDINGS, SLABS, TOWERS } from './ruins/layout'
 import { seeded } from './ruins/noise3'
@@ -124,11 +124,14 @@ function Building({ spec, index, baseY = 0, state, onHover, onSelect, mats, make
 }
 
 export default function Ruins({ hovered, selected, onHover, onSelect, mats = materials, makeWindow = windowMaterial }) {
-  // Headland buildings stand on the rock; sink them slightly so they read as rooted.
-  const headland = useMemo(
-    () => HEADLAND_BUILDINGS.map((b) => ({ spec: b, baseY: (headlandTopAt(b.x, b.z) ?? 8) - 0.8 })),
-    [],
-  )
+  // Headland buildings stand on the scanned cliffs once those have loaded; sunk slightly so
+  // they read as rooted.
+  const [headland, setHeadland] = useState([])
+  useEffect(() => {
+    let live = true
+    headlandTopFn().then((topAt) => live && setHeadland(HEADLAND_BUILDINGS.map((b) => ({ spec: b, baseY: (topAt(b.x, b.z) ?? 8) - 0.8 }))))
+    return () => (live = false)
+  }, [])
   // The smaller ruins on the left stand in the shallows, sunk a little so they read as rooted.
   const plateau = useMemo(() => PLATEAU_BUILDINGS.map((b) => ({ spec: b, baseY: -1 })), [])
 

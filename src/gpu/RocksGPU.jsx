@@ -23,7 +23,7 @@ import {
   vec2,
   vec3,
 } from 'three/tsl'
-import { headlandDisplay, rockGroups } from '../scene/Rocks'
+import { rockGroups } from '../scene/Rocks'
 import { color } from '../scene/world'
 import { surface, triplanar } from './textures'
 import { applyFog, fbm3g, foamShadeAt, landDist, swash, u, vnoise, vnoise3 } from './tsl'
@@ -211,15 +211,12 @@ export function rockMaterialsGPU() {
 }
 
 export default function RocksGPU() {
-  const { headland, groups } = useMemo(() => {
+  const groups = useMemo(() => {
     const { rock, stone } = rockMaterialsGPU()
-    return { groups: rockGroups(rock, stone), headland: headlandDisplay(rock) }
+    return rockGroups(rock, stone)
   }, [])
   return (
     <group>
-      {headland.map((m, i) => (
-        <primitive key={`h${i}`} object={m} />
-      ))}
       {groups.map((m, i) => (
         <primitive key={`r${i}`} object={m} />
       ))}

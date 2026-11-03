@@ -8,7 +8,7 @@ import CursorField from '../scene/CursorField'
 import Piano from '../scene/Piano'
 import ShorePlants from '../scene/ShorePlants'
 import Life from '../scene/Life'
-import Boulders from '../scene/Boulders'
+import ScannedRocks from '../scene/ScannedRocks'
 import { Adaptive, FrameLimiter } from '../scene/Perf'
 import { SUN_DIR, shared } from '../scene/world'
 import EffectsGPU from './EffectsGPU'
@@ -116,8 +116,10 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       dpr={q.dpr}
       camera={{ fov: 42, near: 0.1, far: 3000, position: [0, 1, 9] }}
       gl={gl}
-      onCreated={({ gl, camera }) => {
+      onCreated={({ gl, camera, scene }) => {
         gl.toneMapping = THREE.NeutralToneMapping
+        // Haze for the standard materials (scanned rocks, piano), matching the custom shaders' fog.
+        scene.fog = new THREE.FogExp2(shared.uFogColor.value, shared.uFogDensity.value)
         camera.layers.enable(REFLECTION_HIDDEN) // grass and flowers: seen, but not reflected
       }}
       onPointerMissed={() => onSelect(null)}
@@ -144,7 +146,7 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       {grassEnabled && <ShorePlants />}
       {debug.flowers && <PetalsGPU count={q.petals} />}
       <RocksGPU />
-      <Boulders />
+      <ScannedRocks />
       <RuinsGPU hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano captureEnv={captureEnvGPU} />
       {debug.life && <Life />}
