@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { debug } from '../quality'
 import { bedFactor } from './beds'
-import { fogGLSL, noiseGLSL, shadowGLSL } from './glsl'
+import { fogGLSL, noiseGLSL, shadowGLSL, rippleGLSL } from './glsl'
 import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, landDist, mainDist, palette, shared } from './world'
 
 // A tiled grass field in the spirit of Ghost of Tsushima's grass, adapted to WebGL2:
@@ -217,6 +217,7 @@ uniform float uTime;
 uniform float uMotion;
 uniform vec3 cBase, cTip, cFrost, cSky, cGround, cSun, cBlue;
 uniform vec3 uPianoPos, uPianoGlow;
+${rippleGLSL}
 uniform float uGlowPulse;
 varying float vT;
 varying float vRand;
@@ -279,6 +280,7 @@ void main(){
   // Blue spill from the piano.
   float pd = length(vWorld.xz - uPianoPos.xz);
   col += uPianoGlow * uGlowPulse * (0.2 + t) * 0.5 / (1.0 + pd * pd * 0.9);
+  col += uPianoGlow * pianoRipple(pd, uTime) * (0.25 + t) * 0.7;
 
   gl_FragColor = vec4(applyFog(col, dist, V), 1.0);
 }

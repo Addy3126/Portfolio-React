@@ -1,6 +1,9 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import Lenis from 'lenis'
 import Overlay from './overlay/Overlay'
+import PianoBar from './overlay/PianoBar'
+import { enterPlay, exitPlay } from './piano/engine'
+import usePianoKeyboard from './piano/usePianoKeyboard'
 import { SECTIONS, motion } from './store'
 import { hasWebGL, reducedMotion } from './quality'
 
@@ -39,6 +42,23 @@ export default function App() {
   const [hovered, setHovered] = useState(null)
   const [selected, setSelected] = useState(null)
   const lenis = useRef(null)
+  // Seated at the piano: page scrolling stops, the camera moves to the keys and the piano
+  // controls replace the panels.
+  const [playing, setPlaying] = useState(false)
+  const startPlaying = useCallback(() => {
+    enterPlay()
+    lenis.current?.stop()
+    document.documentElement.classList.add('at-piano')
+    document.activeElement?.blur?.()
+    setPlaying(true)
+  }, [])
+  const stopPlaying = useCallback(() => {
+    exitPlay()
+    lenis.current?.start()
+    document.documentElement.classList.remove('at-piano')
+    setPlaying(false)
+  }, [])
+  usePianoKeyboard(playing, stopPlaying)
   const [renderer, setRenderer] = useState(null)
   // Take the loader out once its fade has had time to run: a CSS transition can stall when
   // the page is busy compiling shaders, and a timer still fires.
@@ -127,7 +147,9 @@ export default function App() {
         onHover={setHovered}
         onSelect={setSelected}
         ready={ready}
+        onPlay={webgl ? startPlaying : null}
       />
+      {playing && <PianoBar onExit={stopPlaying} />}
       <div className="scroll-space" style={{ height: `${100 + (SECTIONS.length - 1) * 130}vh` }} />
     </>
   )

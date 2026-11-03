@@ -7,4 +7,5 @@ export const motion = {
   pointerY: 0, // -1..1
   pointerMovedAt: -1e9, // performance.now() of the last pointer move
   pointerInside: false,
+  playing: false, // at the piano (play mode)
 }

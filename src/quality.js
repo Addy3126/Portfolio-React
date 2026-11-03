@@ -21,6 +21,8 @@ export function settingsFor(tierName) {
   q.ao = q.effects === 'full'
   q.contact = tierName === 'high' || tierName === 'ultra'
   q.reflectAll = tierName === 'high' || tierName === 'ultra'
+  // Static shadow map for the scanned rocks (texels per side; 0 = none).
+  q.rockShadows = params.get('rockshadow') === '0' ? 0 : ({ ultra: 4096, high: 4096, mid: 2048 }[tierName] ?? 0)
   return q
 }
 

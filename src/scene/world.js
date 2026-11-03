@@ -94,6 +94,10 @@ export const shared = {
   uCursorStrength: { value: 0 },
   // Distance from the camera where grass blades stop; the ground paints a carpet beyond.
   uGrassFar: { value: 999 },
+  // Rings of light spreading over the field from the piano on each note: start times (in
+  // uTime) and strengths of the last four.
+  uRippleT: { value: new THREE.Vector4(-1e4, -1e4, -1e4, -1e4) },
+  uRippleA: { value: new THREE.Vector4() },
   uGrassHi: { value: 0 },
 }
 

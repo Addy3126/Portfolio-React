@@ -210,3 +210,15 @@ vec3 foamShadeAt(vec3 base, vec3 V, vec2 xz, float amt){
   return foamShade(base, V) * v * (0.85 + 0.15 * amt);
 }
 `
+
+export const rippleGLSL = /* glsl */ `
+// Rings of light spreading from the piano when it is played (scene/PlayEffects.jsx).
+uniform vec4 uRippleT;
+uniform vec4 uRippleA;
+float pianoRipple(float d, float now){
+  vec4 age = max(vec4(now) - uRippleT, vec4(0.0));
+  vec4 r = age * 3.2;
+  vec4 band = exp(-((vec4(d) - r) * (vec4(d) - r)) / 0.18) * exp(-age * 0.85) * uRippleA;
+  return band.x + band.y + band.z + band.w;
+}
+`

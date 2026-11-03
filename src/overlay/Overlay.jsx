@@ -30,7 +30,7 @@ function smoothstep(a, b, x) {
   return t * t * (3 - 2 * t)
 }
 
-export default function Overlay({ goTo, hovered, selected, onHover, onSelect, ready }) {
+export default function Overlay({ goTo, hovered, selected, onHover, onSelect, ready, onPlay }) {
   const panels = useRef([])
   const cue = useRef(null)
   usePanelFades(panels, cue)
@@ -98,6 +98,11 @@ export default function Overlay({ goTo, hovered, selected, onHover, onSelect, re
             <li key={s}>{s}</li>
           ))}
         </ul>
+        {onPlay && (
+          <button className="play-piano" onClick={onPlay}>
+            <span aria-hidden="true">♪</span> Play the piano
+          </button>
+        )}
       </section>
 
       <section ref={(el) => (panels.current[2] = el)} className="panel projects" aria-labelledby="projects-h">
@@ -166,6 +171,13 @@ export default function Overlay({ goTo, hovered, selected, onHover, onSelect, re
           ))}
         </ul>
         <p className="footer">© {new Date().getFullYear()} {site.name}</p>
+        <p className="footer credit">
+          Piano sound: Salamander Grand Piano by Alexander Holm (
+          <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noreferrer">
+            CC BY 3.0
+          </a>
+          ).
+        </p>
       </section>
     </>
   )

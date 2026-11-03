@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { fogGLSL, noiseGLSL, shadowGLSL, shoreGLSL, swashGLSL } from './glsl'
+import { fogGLSL, noiseGLSL, shadowGLSL, shoreGLSL, swashGLSL, rippleGLSL } from './glsl'
 import { surfaceUniforms } from './surfaces'
 import { cullHidden } from './visibility'
 import { color, landDist, palette, shared } from './world'
@@ -22,6 +22,7 @@ uniform vec3 cPebble;
 uniform vec3 cNear, cFar, cFrost, cSand, cWet, cCarpet, cRockG, cFoam, cSkyRefl, cSandUnder;
 uniform float uGrassFar;
 uniform vec3 uPianoPos, uPianoGlow;
+${rippleGLSL}
 uniform float uGlowPulse;
 varying vec3 vWorld;
 ${noiseGLSL}
@@ -115,6 +116,7 @@ void main(){
 
   float pd = length(vWorld.xz - uPianoPos.xz);
   col += uPianoGlow * uGlowPulse * 0.5 / (1.0 + pd * pd * 1.2);
+  col += uPianoGlow * pianoRipple(pd, uTime) * 0.55;
   gl_FragColor = vec4(applyFog(col, dist, V), 1.0);
 }
 `

@@ -5,7 +5,7 @@ import { cullHidden } from '../scene/visibility'
 import { color, landDist as landDistJS, palette } from '../scene/world'
 import { beachShadow, pianoShadow } from './shadow'
 import { surface } from './textures'
-import { applyFog, foamShadeAt, landDist, mainDist, spitDist, swash, u, vnoise } from './tsl'
+import { applyFog, foamShadeAt, landDist, mainDist, spitDist, swash, u, vnoise, pianoRipple } from './tsl'
 
 // Ground, as the WebGL ground: field soil, beach and spit sand (ripples, grain, grit), the
 // shore swash (water sheet, foam, wet sand) shared with the sea, seabed darkening, far
@@ -121,6 +121,7 @@ export default function GroundGPU() {
 
       const pd = length(xz.sub(u.pianoPos.xz))
       col.addAssign(u.pianoGlow.mul(u.glowPulse).mul(0.5).div(pd.mul(pd).mul(1.2).add(1.0)))
+      col.addAssign(u.pianoGlow.mul(pianoRipple(pd)).mul(0.55))
       return applyFog(col, dist, V)
     })()
     return m

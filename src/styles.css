@@ -160,6 +160,39 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; text
 .project-detail .note { margin: 14px 0 0; font-size: 13px; color: var(--ink-soft); font-style: italic; }
 .links { list-style: none; margin: 0; padding: 0; display: flex; gap: 24px; justify-content: center; }
 .footer { margin: 22px 0 0; font-size: 12px; color: var(--ink-soft); }
+.footer.credit { margin-top: 6px; font-size: 11px; opacity: 0.75; }
+.footer.credit a { color: inherit; margin: 0; border: none; text-decoration: underline; }
+
+/* Playing the piano */
+.play-piano { margin-top: 18px; display: inline-flex; gap: 10px; align-items: center; padding: 10px 20px; min-height: 44px; border-radius: 999px; border: 1px solid rgba(111, 155, 255, 0.55); background: rgba(70, 100, 230, 0.18); color: var(--ink); font-size: 14px; letter-spacing: 0.04em; transition: background 0.25s, box-shadow 0.25s; }
+.play-piano:hover, .play-piano:focus-visible { background: rgba(90, 125, 255, 0.32); box-shadow: 0 0 22px rgba(111, 155, 255, 0.45); }
+.play-piano span { font-size: 16px; color: #9fbcff; }
+.at-piano .panel, .at-piano .scroll-cue, .at-piano .topbar nav { opacity: 0 !important; visibility: hidden !important; transition: opacity 0.4s; }
+.piano-bar { position: fixed; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); translate: -50% 0; z-index: 20; width: min(980px, calc(100vw - 32px)); display: flex; flex-direction: column; align-items: center; gap: 8px; animation: bar-in 0.6s ease 0.5s both; }
+@keyframes bar-in { from { opacity: 0; translate: -50% 16px; } }
+.piano-note { position: fixed; left: 50%; top: 18vh; translate: -50% 0; font: 400 56px/1 var(--font-display); color: #cfe0ff; text-shadow: 0 0 26px rgba(111, 155, 255, 0.9); opacity: 0; pointer-events: none; }
+.piano-note.show { animation: note-rise 1.4s ease-out both; }
+@keyframes note-rise { 0% { opacity: 0; transform: translateY(8px); } 12% { opacity: 1; } 100% { opacity: 0; transform: translateY(-26px); } }
+.mini-keys { position: relative; display: grid; grid-template-columns: repeat(var(--n), 1fr); width: min(400px, 100%); height: 52px; }
+.mk { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 6px; border: 1px solid var(--line); background: rgba(232, 228, 255, 0.12); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); transition: background 0.12s, box-shadow 0.12s, transform 0.08s; }
+.mk.white { border-radius: 0 0 5px 5px; }
+.mk b { font: 600 12px/1 var(--font-body, inherit); color: var(--ink); }
+.mk i { display: none; }
+.mk.black { position: absolute; top: 0; height: 58%; width: calc(100% / var(--n) * 0.62); left: calc(100% / var(--n) * (var(--i) + 1) - 100% / var(--n) * 0.31); background: rgba(10, 9, 30, 0.85); border-radius: 0 0 4px 4px; z-index: 1; padding-bottom: 5px; }
+.mk.on { background: rgba(111, 155, 255, 0.55); box-shadow: 0 0 18px rgba(111, 155, 255, 0.8); transform: translateY(2px); }
+.mk.black.on { background: rgba(80, 120, 255, 0.85); }
+.piano-controls { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; align-items: center; }
+.piano-controls button, .piano-controls .pedal, .octave { min-height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(14, 12, 40, 0.68); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-size: 13px; color: var(--ink); }
+.octave { padding: 2px 4px; }
+.octave button { border: none; background: none; min-height: 32px; padding: 2px 8px; font-size: 16px; }
+.octave span { font-size: 13px; min-width: 64px; text-align: center; }
+.piano-controls button:disabled { opacity: 0.4; cursor: default; }
+.piano-controls .pedal { color: var(--ink-soft); transition: color 0.15s, box-shadow 0.15s; }
+.piano-controls .pedal.on { color: var(--ink); box-shadow: 0 0 14px rgba(111, 155, 255, 0.7); border-color: rgba(111, 155, 255, 0.7); }
+.piano-controls .rec.on { border-color: rgba(255, 110, 140, 0.8); box-shadow: 0 0 14px rgba(255, 110, 140, 0.5); }
+.piano-controls .leave { border-color: rgba(245, 200, 208, 0.45); }
+kbd { font: 600 10px/1 inherit; padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink-soft); }
+.piano-help { margin: 0; font-size: 12px; color: var(--ink-soft); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6); }
 
 @media (max-width: 760px) {
   .topbar { gap: 12px; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
@@ -181,6 +214,8 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; text
   .email button, .email a.call { min-height: 44px; padding: 10px 18px; display: inline-flex; align-items: center; }
   .links a { padding: 10px 4px; }
   .project-list button { min-height: 44px; }
+  .piano-controls button, .piano-controls .pedal, .octave { min-height: 44px; }
+  .piano-note { font-size: 40px; top: 12vh; }
 }
 
 @media (prefers-reduced-motion: reduce) {
