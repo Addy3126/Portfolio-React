@@ -65,7 +65,7 @@ const grade = Fn(([c0]) => {
   return clamp(mix(vec3(l2), c, float(1.0).add(float(1.0).sub(sat).mul(0.18))), 0.0, 1.0)
 })
 
-export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false, aoFull = false, contact = false }) {
+export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false, aoFull = false, contact = false, flare = true }) {
   const { gl, scene, camera, size } = useThree()
 
   const { pipeline, sunUV, sunOn, sunView } = useMemo(() => {
@@ -221,6 +221,57 @@ export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false,
       pipeline._aspect = aspect
     }
 
+    if (flare) {
+      // Sun lens flare: how much of the sun disc is in view (sky depth sampled on a small
+      // ring around it), then ghosts along the line through the screen centre, a faint halo
+      // and a soft horizontal streak. Analytic shapes, so nothing can flicker.
+      const flareDepth = scenePass.getTextureNode('depth')
+      const fNear = uniform(camera.near)
+      const fFar = uniform(camera.far)
+      const flareAspect = uniform(1)
+      pipeline._flareAspect = flareAspect
+      const flareCol = Fn(() => {
+        const visSum = float(0.0).toVar()
+        for (let k = 0; k < 12; k++) {
+          const a = (k / 12) * Math.PI * 2
+          const r = k % 2 ? 0.006 : 0.012
+          const p = sunUV.add(vec2(Math.cos(a) * r, Math.sin(a) * r).div(vec2(flareAspect, 1.0)))
+          const z = perspectiveDepthToViewZ(flareDepth.sample(p).x, fNear, fFar)
+          visSum.addAssign(smoothstep(-1300.0, -1450.0, z))
+        }
+        const onScreen = smoothstep(-0.1, 0.05, sunUV.x).mul(smoothstep(1.1, 0.95, sunUV.x)).mul(smoothstep(-0.1, 0.05, sunUV.y)).mul(smoothstep(1.1, 0.95, sunUV.y))
+        const vis = visSum.div(12.0).mul(onScreen).mul(sunOn).toVar()
+        const res = vec3(0.0).toVar()
+        If(vis.greaterThan(0.001), () => {
+          const A = vec2(flareAspect, 1.0)
+          const toC = vec2(0.5).sub(sunUV)
+          // Ghosts: [position along sun->centre->beyond, radius, tint].
+          const GHOSTS = [
+            [0.55, 0.035, [0.55, 0.45, 0.9]],
+            [0.95, 0.02, [0.9, 0.6, 0.75]],
+            [1.35, 0.06, [0.4, 0.5, 1.0]],
+            [1.7, 0.028, [0.75, 0.55, 1.0]],
+            [2.15, 0.09, [0.35, 0.3, 0.8]],
+          ]
+          for (const [f, rad, tint] of GHOSTS) {
+            const c = sunUV.add(toC.mul(f))
+            const d = length(uv().sub(c).mul(A))
+            const disc = smoothstep(rad, rad * 0.55, d).mul(float(0.55).add(smoothstep(rad * 0.4, rad, d).mul(0.45)))
+            res.addAssign(vec3(...tint).mul(disc).mul(0.16))
+          }
+          // Halo ring centred on the screen-mirrored sun.
+          const hd = length(uv().sub(sunUV.add(toC.mul(1.0))).mul(A))
+          res.addAssign(vec3(0.5, 0.42, 0.85).mul(exp(abs(hd.sub(0.32)).mul(-60.0))).mul(0.03))
+          // Horizontal streak and glare around the sun.
+          const ds = uv().sub(sunUV).mul(A)
+          res.addAssign(vec3(0.75, 0.7, 1.0).mul(exp(abs(ds.y).mul(-320.0))).mul(exp(abs(ds.x).mul(-4.5))).mul(0.32))
+          res.addAssign(vec3(1.0, 0.85, 0.8).mul(exp(length(ds).mul(-14.0))).mul(0.12))
+        })
+        return res.mul(vis)
+      })()
+      hdr = hdr.add(flareCol)
+    }
+
     let col = toneMapping(THREE.NeutralToneMapping, float(1.0), vec4(hdr, 1.0)).rgb
     if (gradeOn) col = grade(col)
     // Vignette (as postprocessing's default: offset 0.3, darkness 0.55).
@@ -237,11 +288,12 @@ export default function EffectsGPU({ godRays = true, gradeOn = true, ao = false,
     pipeline.outputNode = smaa(out)
     pipeline._texel = texel
     return { pipeline, sunUV, sunOn, sunView }
-  }, [gl, scene, camera, godRays, gradeOn, ao, aoFull, contact])
+  }, [gl, scene, camera, godRays, gradeOn, ao, aoFull, contact, flare])
 
   useEffect(() => {
     pipeline._texel.value.set(1 / (size.width * gl.getPixelRatio()), 1 / (size.height * gl.getPixelRatio()))
     if (pipeline._aspect) pipeline._aspect.value = size.width / size.height
+    if (pipeline._flareAspect) pipeline._flareAspect.value = size.width / size.height
   }, [pipeline, size, gl])
   useEffect(() => () => pipeline.dispose(), [pipeline])
 

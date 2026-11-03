@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 import { SHADOW_LAYER } from './PianoShadow'
 import Bench from './piano/Bench'
 import { design } from './piano/designs'
@@ -59,12 +60,85 @@ export function pianoMaterials(d) {
     ivory: new THREE.MeshStandardMaterial({ color: '#f3efe6', roughness: 0.32 }),
     ebony: new THREE.MeshPhysicalMaterial({ color: '#08080b', roughness: 0.22, clearcoat: 0.6, clearcoatRoughness: 0.12 }),
     redFelt: new THREE.MeshStandardMaterial({ color: '#6e1424', roughness: 1 }),
+    sheet: new THREE.MeshStandardMaterial({ map: sheetTexture(), roughness: 0.9, side: THREE.DoubleSide }),
     blackFelt: new THREE.MeshStandardMaterial({ color: '#121016', roughness: 1, bumpMap: felt, bumpScale: 0.8 }),
     steel: new THREE.MeshStandardMaterial({ color: '#d8dbe4', metalness: 1, roughness: 0.3 }),
     string: new THREE.LineBasicMaterial({ color: '#8e92a3' }),
     bassString: new THREE.LineBasicMaterial({ color: '#8a6440' }),
     glow: new THREE.MeshBasicMaterial({ color: new THREE.Color(palette.pianoGlow), toneMapped: false }),
   }
+}
+
+// Black key: a box whose top is narrower than its base and whose front slopes back.
+function blackKeyGeometry() {
+  const g = new THREE.BoxGeometry(0.092, 0.016, 0.0115, 1, 1, 1)
+  const p = g.attributes.position
+  for (let i = 0; i < p.count; i++) {
+    if (p.getY(i) > 0) {
+      p.setZ(i, p.getZ(i) * 0.7)
+      if (p.getX(i) < 0) p.setX(i, p.getX(i) + 0.012)
+    }
+  }
+  g.computeVertexNormals()
+  return g
+}
+
+// Pedal seen from above: a narrow shank widening into a rounded foot (x toward the player).
+function pedalGeometry() {
+  const s = new THREE.Shape()
+  s.moveTo(0.06, -0.008)
+  s.lineTo(-0.02, -0.012)
+  s.quadraticCurveTo(-0.075, -0.02, -0.075, 0)
+  s.quadraticCurveTo(-0.075, 0.02, -0.02, 0.012)
+  s.lineTo(0.06, 0.008)
+  s.lineTo(0.06, -0.008)
+  const g = new THREE.ExtrudeGeometry(s, { depth: 0.008, bevelEnabled: true, bevelThickness: 0.002, bevelSize: 0.002, bevelSegments: 2, curveSegments: 8 })
+  g.rotateX(Math.PI / 2) // lie flat: shape in x-z, thickness along y
+  g.translate(0, 0.004, 0)
+  return g
+}
+
+// Printed music for the desk: staves and notes on cream paper (one page; the other mirrors).
+function sheetTexture() {
+  const c = document.createElement('canvas')
+  c.width = 256
+  c.height = 340
+  const g = c.getContext('2d')
+  g.fillStyle = '#ece4d2'
+  g.fillRect(0, 0, c.width, c.height)
+  g.strokeStyle = 'rgba(40, 34, 48, 0.75)'
+  g.fillStyle = 'rgba(30, 26, 40, 0.85)'
+  g.lineWidth = 1
+  let seed = 7
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646
+  g.fillRect(70, 18, 116, 5) // title
+  for (let st = 0; st < 9; st++) {
+    const y0 = 42 + st * 32
+    for (let l = 0; l < 5; l++) {
+      g.beginPath()
+      g.moveTo(16, y0 + l * 4)
+      g.lineTo(240, y0 + l * 4)
+      g.stroke()
+    }
+    for (let x = 30; x < 236; x += 9 + rnd() * 10) {
+      const y = y0 + Math.floor(rnd() * 9) * 2
+      g.beginPath()
+      g.ellipse(x, y, 2.6, 1.8, -0.4, 0, Math.PI * 2)
+      g.fill()
+      g.beginPath()
+      g.moveTo(x + 2.4, y)
+      g.lineTo(x + 2.4, y - 11)
+      g.stroke()
+    }
+    g.beginPath()
+    g.moveTo(16, y0)
+    g.lineTo(16, y0 + 16)
+    g.stroke()
+  }
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  t.anisotropy = 4
+  return t
 }
 
 // Instanced boxes from a list of [x, y, z, sx, sy, sz, rotZ?].
@@ -232,14 +306,16 @@ function buildPiano(d, mats) {
   // --- Keyboard: keybed, key slip, 52 white and 36 black keys, felt strip, fallboard, cheek blocks.
   add(new THREE.BoxGeometry(0.2, 0.065, 1.38), mats.lacquer, [-0.1, 0.7225, 0])
   add(new THREE.BoxGeometry(0.02, 0.072, 1.38), mats.lacquer, [-0.196, 0.735, 0])
+  // White keys with softly rounded fronts and edges; black keys tapered (narrower on top,
+  // with a sloped front), as real sharps are.
   const whites = []
-  for (let i = 0; i < 52; i++) whites.push([-0.105, 0.766, KEY_Z0 + (i + 0.5) * KEY_W, 0.148, 0.02, KEY_W - 0.0012])
-  parts.push(boxes(whites, mats.ivory))
+  for (let i = 0; i < 52; i++) whites.push([-0.105, 0.766, KEY_Z0 + (i + 0.5) * KEY_W])
+  parts.push(instanced(new RoundedBoxGeometry(0.148, 0.02, KEY_W - 0.0012, 2, 0.0028), mats.ivory, whites))
   const blacks = []
   for (let i = 0; i < 51; i++) {
-    if ('ACDFG'.includes('ABCDEFG'[i % 7])) blacks.push([-0.064, 0.783, KEY_Z0 + (i + 1) * KEY_W, 0.092, 0.016, 0.0115])
+    if ('ACDFG'.includes('ABCDEFG'[i % 7])) blacks.push([-0.064, 0.783, KEY_Z0 + (i + 1) * KEY_W])
   }
-  parts.push(boxes(blacks, mats.ebony))
+  parts.push(instanced(blackKeyGeometry(), mats.ebony, blacks))
   add(new THREE.BoxGeometry(0.006, 0.007, 1.24), mats.redFelt, [-0.026, 0.779, 0])
   add(new THREE.BoxGeometry(0.045, 0.1, 1.25), mats.lacquer, [0.005, 0.81, 0], [0, 0, 0.18])
   const cheek = new THREE.Shape()
@@ -293,6 +369,21 @@ function buildPiano(d, mats) {
   const ledge = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, 0.86), mats.lacquer)
   ledge.position.set(-0.03, 0.01, 0)
   deskGroup.add(ledge)
+  // Sheet music open on the desk: two slightly bowed pages.
+  for (const side of [-1, 1]) {
+    const page = new THREE.PlaneGeometry(0.21, 0.28, 8, 1)
+    const pp = page.attributes.position
+    for (let i = 0; i < pp.count; i++) {
+      const u = pp.getX(i) / 0.105 // -1..1 across the page
+      pp.setZ(i, 0.012 * (1 - u * u) + 0.006 * (side * u + 1)) // bowed, rising toward the spine
+    }
+    page.computeVertexNormals()
+    const m = new THREE.Mesh(page, mats.sheet)
+    m.rotation.y = -Math.PI / 2
+    m.position.set(-0.012, 0.165, side * 0.1055)
+    if (side < 0) m.scale.x = -1
+    deskGroup.add(m)
+  }
   parts.push(deskGroup)
 
   // --- Lid: main lid raised on the spine hinges, front flap folded back on top of it.
@@ -380,7 +471,11 @@ function buildPiano(d, mats) {
   }
   add(new THREE.BoxGeometry(0.08, 0.04, 0.24), mats.lacquer, [0.3, RIM_BOTTOM - 0.02, 0])
   add(new THREE.BoxGeometry(0.12, 0.06, 0.24), mats.lacquer, [0.25, 0.07, 0])
-  for (const z of [-0.065, 0, 0.065]) add(new THREE.BoxGeometry(0.13, 0.012, 0.034), mats.brass, [0.16, 0.058, z], [0, 0, 0.12])
+  // Pedals: brass, a narrow shank widening to a rounded foot, with a rod up into the box.
+  for (const z of [-0.065, 0, 0.065]) {
+    add(pedalGeometry(), mats.brass, [0.2, 0.058, z], [0, 0, 0.12])
+    add(new THREE.CylinderGeometry(0.004, 0.004, 0.05, 8), mats.brass, [0.27, 0.085, z])
+  }
 
   // --- Glowing inlay around the rim (Nocturne only).
   if (d.glow) {

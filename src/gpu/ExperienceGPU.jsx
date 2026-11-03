@@ -6,6 +6,9 @@ import { autoQualityEnabled, debug, grassEnabled, settingsFor, tier as startTier
 import CameraRig from '../scene/CameraRig'
 import CursorField from '../scene/CursorField'
 import Piano from '../scene/Piano'
+import ShorePlants from '../scene/ShorePlants'
+import Life from '../scene/Life'
+import Boulders from '../scene/Boulders'
 import { Adaptive, FrameLimiter } from '../scene/Perf'
 import { SUN_DIR, shared } from '../scene/world'
 import EffectsGPU from './EffectsGPU'
@@ -14,7 +17,7 @@ import GrassGPU from './GrassGPU'
 import GroundGPU from './GroundGPU'
 import RocksGPU from './RocksGPU'
 import { PlateauGPU, RuinsGPU } from './RuinsGPU'
-import { PianoShadowGPU } from './shadow'
+import { BeachShadowGPU, PianoShadowGPU } from './shadow'
 import SeaGPU, { REFLECTION_HIDDEN, seaSwap } from './SeaGPU'
 import SkyGPU from './SkyGPU'
 import { sync } from './tsl'
@@ -125,24 +128,29 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       <CameraRig />
       <CursorField />
       {debug.shadow && <PianoShadowGPU />}
+      {debug.shadow && <BeachShadowGPU />}
 
-      <hemisphereLight args={['#8f86c8', '#20255e', 1.2]} />
+      {/* Ground colour: light bounced up from the lavender field onto the piano. */}
+      <hemisphereLight args={['#8f86c8', '#2c2a6c', 1.2]} />
       <directionalLight position={SUN_DIR.clone().multiplyScalar(100)} color="#f5c8d0" intensity={2.2} />
       <directionalLight position={[-6, 4, 12]} color="#8a8fe0" intensity={0.9} />
       <pointLight position={[-1.45, 0.35, 4.3]} color="#6f9bff" intensity={1.4} distance={4} decay={2} />
 
       <SkyGPU />
-      <SeaGPU reflection={debug.reflection ? q.reflection : 0} />
+      <SeaGPU reflection={debug.reflection ? q.reflection : 0} reflectAll={q.reflectAll} />
       <GroundGPU />
       {grassEnabled && <GrassGPU density={q.grassDensity} hiDist={q.grassHi} loDist={q.grassLo} />}
       {grassEnabled && <FieldFlowersGPU />}
+      {grassEnabled && <ShorePlants />}
       {debug.flowers && <PetalsGPU count={q.petals} />}
       <RocksGPU />
+      <Boulders />
       <PlateauGPU />
       <RuinsGPU hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano captureEnv={captureEnvGPU} />
+      {debug.life && <Life />}
 
-      <EffectsGPU godRays={q.godRays && debug.godRays} gradeOn={debug.grade} ao={q.ao && debug.ao} aoFull={tier === 'ultra'} contact={q.contact && debug.contact} />
+      <EffectsGPU godRays={q.godRays && debug.godRays} gradeOn={debug.grade} ao={q.ao && debug.ao} aoFull={tier === 'ultra'} contact={q.contact && debug.contact} flare={debug.flare} />
     </Canvas>
   )
 }

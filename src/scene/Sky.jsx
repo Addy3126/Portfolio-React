@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { tier } from '../quality'
+import { DRIFT, useCloudDrift } from './cloudDrift'
 import { noise3GLSL, noiseGLSL } from './glsl'
 import { color, palette, shared } from './world'
 
@@ -25,6 +26,7 @@ void main(){
 
 const bakeFragment = /* glsl */ `
 uniform vec3 uSunDir;
+uniform vec3 uShift; // the cloud field drifts downwind (see cloudDrift.js)
 uniform vec3 cZenith, cUpper, cMid, cHorizon, cGlow, cCloud, cCloudLit, cFog;
 varying vec3 vDir;
 ${noiseGLSL}
@@ -41,7 +43,8 @@ float density(vec3 p, float cov, bool detail){
   float h = (p.y - SLAB0) / (SLAB1 - SLAB0);
   // Flat-ish bases, rounded tops (cumulus profile).
   float profile = smoothstep(0.0, 0.12, h) * (1.0 - smoothstep(0.45, 1.0, h));
-  vec3 q = vec3(p.x, p.y * 2.2, p.z);
+  vec3 pp = p + uShift;
+  vec3 q = vec3(pp.x, pp.y * 2.2, pp.z);
   float base = fbm3g(q * 0.62 + vec3(3.1, 0.0, 1.7));
   float d = (base - (1.0 - cov)) / max(cov, 0.05) * 1.6;
   d = d * profile - (1.0 - profile) * 0.35;
@@ -123,13 +126,16 @@ void main(){
 
 const liveFragment = /* glsl */ `
 uniform samplerCube uSky;
+uniform samplerCube uSkyB;
+uniform float uBlend;
 uniform float uTime;
 uniform vec3 uSunDir;
+uniform vec3 uFogColor, uFogGlow;
 varying vec3 vDir;
 ${noiseGLSL}
 void main(){
   vec3 d = normalize(vDir);
-  vec4 sky = textureCube(uSky, d);
+  vec4 sky = mix(textureCube(uSky, d), textureCube(uSkyB, d), uBlend);
   vec3 col = sky.rgb;
   float clear = sky.a; // how much open sky shows through the clouds
   float h = d.y;
@@ -147,6 +153,9 @@ void main(){
   float disc = smoothstep(0.99955, 0.99975, sd) * smoothstep(-0.004, 0.003, h);
   col += vec3(7.0, 6.4, 6.2) * disc * mix(0.15, 1.0, clear);
   col += vec3(1.6, 1.3, 1.35) * pow(sd, 500.0) * mix(0.4, 1.0, clear);
+  // Salt-spray haze just above the horizon, so sea and sky meet softly.
+  float haze = exp(-max(h, 0.0) * 38.0) * smoothstep(-0.02, 0.0, h);
+  col = mix(col, mix(uFogColor, uFogGlow, pow(sd, 6.0) * 0.8) * 1.06, haze * 0.42);
   gl_FragColor = vec4(col, 1.0);
 }
 `
@@ -154,6 +163,7 @@ void main(){
 function bakeUniforms() {
   return {
     uSunDir: shared.uSunDir,
+    uShift: { value: new THREE.Vector3() },
     cZenith: { value: color(palette.zenith) },
     cUpper: { value: color(palette.upper) },
     cMid: { value: color(palette.mid) },
@@ -178,32 +188,51 @@ export default function Sky() {
       fragmentShader: liveFragment,
       side: THREE.BackSide,
       depthWrite: false,
-      uniforms: { uSky: { value: target.texture }, uTime: shared.uTime, uSunDir: shared.uSunDir },
+      uniforms: { uSky: { value: target.texture }, uSkyB: { value: target.texture }, uBlend: { value: 0 }, uTime: shared.uTime, uSunDir: shared.uSunDir, uFogColor: shared.uFogColor, uFogGlow: shared.uFogGlow },
     })
     return { target, material }
   }, [])
 
   // Bake the sky and clouds once, then derive the environment map (for the lacquered
-  // piano and other reflective materials) from the same cube.
-  useEffect(() => {
+  // piano and other reflective materials) from the same cube. The bake scene is kept for
+  // the drifting re-bakes.
+  const bake = useMemo(() => {
     const bakeScene = new THREE.Scene()
     const bakeMat = new THREE.ShaderMaterial({ vertexShader: sphereVertex, fragmentShader: bakeFragment, side: THREE.BackSide, depthWrite: false, uniforms: bakeUniforms() })
-    const sphere = new THREE.Mesh(new THREE.SphereGeometry(10, 64, 32), bakeMat)
-    bakeScene.add(sphere)
-    const cam = new THREE.CubeCamera(0.1, 100, target)
-    cam.update(gl, bakeScene)
+    bakeScene.add(new THREE.Mesh(new THREE.SphereGeometry(10, 64, 32), bakeMat))
+    return { bakeScene, bakeMat, cam: new THREE.CubeCamera(0.1, 100, target) }
+  }, [target])
+  const [baked, setBaked] = useState(null)
+  useEffect(() => {
+    bake.bakeMat.uniforms.uShift.value.set(0, 0, 0)
+    bake.cam.update(gl, bake.bakeScene)
     const pmrem = new THREE.PMREMGenerator(gl)
     const env = pmrem.fromCubemap(target.texture)
     scene.environment = env.texture
     scene.environmentIntensity = 0.9
     pmrem.dispose()
-    bakeMat.dispose()
-    sphere.geometry.dispose()
+    setBaked(target.texture)
     return () => {
       scene.environment = null
       env.dispose()
     }
-  }, [gl, scene, target])
+  }, [gl, scene, target, bake])
+
+  const makeTarget = useCallback((size) => new THREE.WebGLCubeRenderTarget(size, { type: THREE.HalfFloatType, generateMipmaps: false }), [])
+  useCloudDrift({
+    enabled: DRIFT,
+    renderer: gl,
+    cubeCamera: bake.cam,
+    bakeScene: bake.bakeScene,
+    setShift: (x, y, z) => bake.bakeMat.uniforms.uShift.value.set(x, y, z),
+    makeTarget,
+    first: baked,
+    show: (a, b, t) => {
+      material.uniforms.uSky.value = a
+      material.uniforms.uSkyB.value = b
+      material.uniforms.uBlend.value = t
+    },
+  })
 
   useEffect(() => () => target.dispose(), [target])
 

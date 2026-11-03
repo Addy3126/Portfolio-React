@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react'
 import * as THREE from 'three/webgpu'
 import {
   Discard,
+  abs,
   Fn,
   If,
   cameraPosition,
@@ -22,9 +23,13 @@ import {
   varying,
   vec2,
   vec3,
+  min,
+  texture,
 } from 'three/tsl'
+import { LANES, LANE_DIR } from '../scene/sunLanes'
 import { color, palette } from '../scene/world'
-import { applyFog, foamShadeAt, landDist, seabedY, spow, swash, u, viewNormal, vnoise } from './tsl'
+import { surface } from './textures'
+import { applyFog, foamShadeAt, landDist, seabedY, spow, swash, u, viewNormal, vnoise, voronoi2 } from './tsl'
 
 // Sea, as the WebGL sea: swell in the vertex stage, short waves and ripples as normals,
 // Beer-Lambert water colour over the sloping seabed, crest scattering toward the sun, sun
@@ -80,6 +85,7 @@ function seaGeometry(cols = 220, rows = 200) {
 // The sea material; refl is the planar reflection node, or null for the sky-colour
 // reflection used when reflections are off (and during the piano's cube capture).
 function seaMaterial(refl) {
+  const sandTex = surface('coast_sand_04')
   const m = new THREE.MeshBasicNodeMaterial({ side: THREE.DoubleSide, fog: false })
   const t = u.time.mul(u.motion)
 
@@ -133,7 +139,34 @@ function seaMaterial(refl) {
     const offshore = max(L.negate(), 0.0)
     const path = offshore.mul(0.55).div(max(cosT, 0.25))
     const trans = exp(vec3(0.55, 0.22, 0.1).negate().mul(path))
-    const sandSeen = c('#5d5aa6').mul(float(0.8).add(vnoise(p.mul(3.0).add(n.xz.mul(4.0))).mul(0.3)))
+    // Sun lanes: towers in the sea block the low sunlight on the water behind them
+    // (see scene/sunLanes.js).
+    const laneS = float(0.0).toVar()
+    for (const [lx, lz, lhw, llen] of LANES) {
+      const rel = p.sub(vec2(lx, lz))
+      const along = dot(rel, vec2(...LANE_DIR))
+      const perp = abs(rel.x.mul(LANE_DIR[1]).sub(rel.y.mul(LANE_DIR[0])))
+      const hw = along.mul(0.006).add(lhw)
+      const soft = along.mul(0.004).add(0.4)
+      const lane = float(1.0)
+        .sub(smoothstep(hw.sub(soft), hw.add(soft), perp))
+        .mul(smoothstep(0.0, 3.0, along))
+        .mul(float(1.0).sub(smoothstep(llen * 0.6, llen, along)))
+      laneS.assign(max(laneS, lane))
+    }
+    const sunLit = float(1.0).sub(laneS.mul(0.85)).toVar()
+    // The sea floor seen through the water: the scanned sand, displaced by the surface
+    // normal (refraction, more in deeper water), with caustics (light focused by the
+    // ripples into a moving web) where the water is clear and sunlit.
+    const depthW = float(SEA_LEVEL).sub(seabedY(p))
+    const pr = p.add(n.xz.mul(min(depthW, 0.5).mul(0.9).add(0.15))).toVar()
+    const sandLum = texture(sandTex.s, pr.div(1.6)).r
+    const sandSeen = c('#5d5aa6').mul(sandLum.mul(0.5).add(0.62)).mul(float(0.85).add(vnoise(pr.mul(3.0)).mul(0.25))).toVar()
+    const cw = pr.mul(2.6).add(vec2(vnoise(pr.mul(0.9).add(t.mul(0.15))), vnoise(pr.mul(0.9).add(4.0).sub(t.mul(0.12)))).sub(0.5).mul(2.4))
+    const caus = float(1.0)
+      .sub(smoothstep(0.0, 0.07, voronoi2(cw, t.mul(0.9)).y))
+      .mul(float(0.35).add(float(1.0).sub(smoothstep(0.0, 0.12, voronoi2(cw.mul(1.7).add(3.0), t.mul(1.1)).y)).mul(0.65)))
+    sandSeen.addAssign(c('#c9c2ff').mul(caus).mul(sunLit).mul(float(1.0).sub(smoothstep(3.0, 16.0, dist))).mul(0.4))
     const deepCol = mix(c('#1c2386'), c(palette.seaFar), smoothstep(120.0, 600.0, dist))
     const body = sandSeen
       .mul(trans)
@@ -142,16 +175,18 @@ function seaMaterial(refl) {
     const reflAmt = clamp(fresnel.mul(1.15).add(0.08), 0.0, 1.0).mul(float(1.0).sub(trans.g.mul(0.5)))
     const col = mix(body, reflCol, reflAmt).toVar()
 
+    col.mulAssign(mix(0.9, 1.0, sunLit))
+
     // Light through the wave crests when looking toward the low sun.
     const crest = max(W.y.add(0.04), 0.0)
     const towardSun = spow(dot(V, u.sunDir), 3.0)
-    col.addAssign(c('#8f7cf0').mul(crest.mul(9.0)).mul(towardSun).mul(float(1.0).sub(fresnel)).mul(float(1.0).sub(smoothstep(60.0, 300.0, dist))))
+    col.addAssign(c('#8f7cf0').mul(sunLit).mul(crest.mul(9.0)).mul(towardSun).mul(float(1.0).sub(fresnel)).mul(float(1.0).sub(smoothstep(60.0, 300.0, dist))))
 
     // Sun glitter: sharp highlights nearby, a broader streak in the distance.
     const sd = max(dot(reflect(V, n), u.sunDir), 0.0)
     const farF = smoothstep(6.0, 400.0, dist)
-    col.addAssign(vec3(5.0, 4.6, 4.4).mul(spow(sd, mix(2600.0, 260.0, farF))).mul(mix(1.0, 0.45, farF)))
-    col.addAssign(c(palette.glow).mul(spow(sd, 60.0)).mul(0.18))
+    col.addAssign(vec3(5.0, 4.6, 4.4).mul(sunLit).mul(spow(sd, mix(2600.0, 260.0, farF))).mul(mix(1.0, 0.45, farF)))
+    col.addAssign(c(palette.glow).mul(sunLit).mul(spow(sd, 60.0)).mul(0.18))
 
     // Shore swash foam (shared with the ground so they meet seamlessly).
     const sw = swash(p, L, t)
@@ -161,7 +196,8 @@ function seaMaterial(refl) {
   return m
 }
 
-export default function SeaGPU({ reflection = 0 }) {
+// reflectAll: grass and flowers appear in the reflection too (higher tiers).
+export default function SeaGPU({ reflection = 0, reflectAll = false }) {
   const { mesh, refl } = useMemo(() => {
     const refl = reflection > 0 ? reflector({ resolutionScale: reflection, bounces: false }) : null
 
@@ -180,14 +216,15 @@ export default function SeaGPU({ reflection = 0 }) {
       const get = base.getVirtualCamera.bind(base)
       base.getVirtualCamera = (cam) => {
         const v = get(cam)
-        v.layers.disable(REFLECTION_HIDDEN)
+        if (reflectAll) v.layers.enable(REFLECTION_HIDDEN)
+        else v.layers.disable(REFLECTION_HIDDEN)
         return v
       }
     }
     seaSwap.mesh = mesh
     seaSwap.plain = plain
     return { mesh, refl }
-  }, [reflection])
+  }, [reflection, reflectAll])
 
   useEffect(() => () => mesh.material.dispose(), [mesh])
   return <primitive object={mesh} />

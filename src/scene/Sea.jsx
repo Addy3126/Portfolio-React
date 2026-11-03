@@ -3,6 +3,8 @@ import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js'
 import { fogGLSL, noiseGLSL, shoreGLSL, swashGLSL } from './glsl'
+import { surfaceUniforms } from './surfaces'
+import { sunLanesGLSL } from './sunLanes'
 import { color, hideInReflection, palette, shared } from './world'
 
 const SEA_LEVEL = -0.04
@@ -55,6 +57,8 @@ uniform sampler2D tDiffuse;
 uniform vec3 color;
 uniform float uTime;
 uniform float uMotion;
+uniform sampler2D tSandS, tSandN;
+uniform vec3 cCaustic;
 uniform vec3 cDeep, cShallow, cFar, cGlow, cSkyRefl, cSandUnder, cFoam, cScatter;
 varying vec4 vUv;
 varying vec3 vWorld;
@@ -64,6 +68,7 @@ ${noiseGLSL}
 ${fogGLSL}
 ${shoreGLSL}
 ${swashGLSL}
+${sunLanesGLSL}
 
 // Slope of one travelling sine wave (deep-water dispersion).
 vec2 waveSlope(vec2 p, vec2 dir, float len, float amp, float t){
@@ -121,7 +126,18 @@ void main(){
   float offshore = max(-L, 0.0);
   float path = offshore * 0.55 / max(cosT, 0.25);
   vec3 trans = exp(-vec3(0.55, 0.22, 0.1) * path);
-  vec3 sandSeen = cSandUnder * (0.8 + 0.3 * vnoise(p * 3.0 + n.xz * 4.0));
+  // Sun lanes: towers in the sea block the low sunlight on the water behind them.
+  float sunLit = 1.0 - 0.85 * laneShadow(p);
+  // The sea floor seen through the water: the scanned sand, displaced by the surface
+  // normal (refraction, more in deeper water), with caustics (light focused by the
+  // ripples into a moving web) where the water is clear and sunlit.
+  vec2 pr = p + n.xz * (0.15 + min(depth, 0.5) * 0.9);
+  float sandLum = texture2D(tSandS, pr / 1.6).r;
+  vec3 sandSeen = cSandUnder * (0.62 + 0.5 * sandLum) * (0.85 + 0.25 * vnoise(pr * 3.0));
+  vec2 cw = pr * 2.6 + (vec2(vnoise(pr * 0.9 + t * 0.15), vnoise(pr * 0.9 + 4.0 - t * 0.12)) - 0.5) * 2.4;
+  float caus = 1.0 - smoothstep(0.0, 0.07, voronoi2(cw, t * 0.9).y);
+  caus *= 0.35 + 0.65 * (1.0 - smoothstep(0.0, 0.12, voronoi2(cw * 1.7 + 3.0, t * 1.1).y));
+  sandSeen += cCaustic * caus * sunLit * (1.0 - smoothstep(3.0, 16.0, dist)) * 0.4;
   vec3 deepCol = mix(cDeep, cFar, smoothstep(120.0, 600.0, dist));
   vec3 body = sandSeen * trans + deepCol * (1.0 - trans) + cShallow * 0.25 * trans.b * (1.0 - trans.r);
   float clear = trans.g;
@@ -132,14 +148,16 @@ void main(){
   // swell glow (subsurface scattering, as in game ocean shaders).
   float crest = max(vWorld.y + 0.04, 0.0);
   float towardSun = spow(dot(V, uSunDir), 3.0);
-  col += cScatter * crest * 9.0 * towardSun * (1.0 - fresnel) * (1.0 - smoothstep(60.0, 300.0, dist));
+  // Sun lanes: towers in the sea block the low sunlight on the water behind them.
+  col *= mix(0.9, 1.0, sunLit);
+  col += sunLit * cScatter * crest * 9.0 * towardSun * (1.0 - fresnel) * (1.0 - smoothstep(60.0, 300.0, dist));
 
   // Sun glitter: sharp highlights nearby, a broader streak in the distance.
   vec3 R = reflect(V, n);
   float sd = max(dot(R, uSunDir), 0.0);
   float shin = mix(2600.0, 260.0, smoothstep(6.0, 400.0, dist));
-  col += vec3(5.0, 4.6, 4.4) * spow(sd, shin) * mix(1.0, 0.45, smoothstep(6.0, 400.0, dist));
-  col += cGlow * spow(sd, 60.0) * 0.18;
+  col += sunLit * vec3(5.0, 4.6, 4.4) * spow(sd, shin) * mix(1.0, 0.45, smoothstep(6.0, 400.0, dist));
+  col += sunLit * cGlow * spow(sd, 60.0) * 0.18;
 
   // Shore swash foam (shared with the sand shader so they meet seamlessly).
   vec4 sw = swash(p, landDist(p), t);
@@ -162,6 +180,8 @@ const SeaShader = {
 
 function linkUniforms(material) {
   Object.assign(material.uniforms, shared, {
+    ...surfaceUniforms('coast_sand_04', 'tSand'),
+    cCaustic: { value: color('#c9c2ff') },
     cDeep: { value: color('#1c2386') },
     cShallow: { value: color('#4a62d4') },
     cFar: { value: color(palette.seaFar) },
@@ -202,7 +222,8 @@ function seaGeometry(cols = 220, rows = 200) {
   return g
 }
 
-export default function Sea({ reflection = 0 }) {
+// reflectAll: grass and flowers appear in the reflection too (higher tiers).
+export default function Sea({ reflection = 0, reflectAll = false }) {
   const { size, viewport } = useThree()
   const scale = reflection
 
@@ -215,9 +236,9 @@ export default function Sea({ reflection = 0 }) {
       // Skip grass and flowers while rendering the mirrored view.
       const render = m.onBeforeRender
       m.onBeforeRender = function (...args) {
-        hideInReflection.forEach((o) => (o.visible = false))
+        if (!reflectAll) hideInReflection.forEach((o) => (o.visible = false))
         render.apply(this, args)
-        hideInReflection.forEach((o) => (o.visible = true))
+        if (!reflectAll) hideInReflection.forEach((o) => (o.visible = true))
       }
     } else {
       m = new THREE.Mesh(
@@ -231,7 +252,7 @@ export default function Sea({ reflection = 0 }) {
     m.position.set(0, SEA_LEVEL, 0)
     m.frustumCulled = false
     return m
-  }, [scale])
+  }, [scale, reflectAll])
 
   // Keep the reflection at a fraction of the screen resolution.
   useEffect(() => {

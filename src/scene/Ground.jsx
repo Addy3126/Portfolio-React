@@ -102,7 +102,7 @@ void main(){
   col = mix(col, cWet * 0.5, 1.0 - smoothstep(-1.5, -0.1, inland));
 
   // Grass carpet where blades are no longer drawn (far LOD).
-  float far = smoothstep(uGrassFar - 4.0, uGrassFar, length(vWorld.xz - cameraPosition.xz));
+  float far = smoothstep(uGrassFar - 9.0, uGrassFar - 3.0, length(vWorld.xz - cameraPosition.xz));
   vec3 carpet = cCarpet * (0.8 + 0.35 * vnoise(vWorld.xz * 0.6)) * (0.85 + 0.3 * vnoise(vWorld.xz * 0.09 + 3.0));
   col = mix(col, carpet, far * (1.0 - beach) * step(0.0, inland));
 
@@ -110,7 +110,7 @@ void main(){
   col += cFrost * back * 0.25 * (1.0 - beach);
 
   // Piano shadow and contact darkening.
-  float sh = pianoShadow(vWorld);
+  float sh = pianoShadow(vWorld) * mix(1.0, beachShadow(vWorld), 0.9);
   col *= mix(0.45, 1.0, sh) * pianoContact(vWorld.xz);
 
   float pd = length(vWorld.xz - uPianoPos.xz);

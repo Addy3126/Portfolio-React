@@ -8,11 +8,15 @@ import Effects from './Effects'
 import FieldFlowers from './FieldFlowers'
 import Grass from './Grass'
 import Ground from './Ground'
+import Life from './Life'
+import Boulders from './Boulders'
 import { Adaptive, FrameLimiter } from './Perf'
 import Petals from './Petals'
 import Piano from './Piano'
+import BeachShadow from './BeachShadow'
 import PianoShadow from './PianoShadow'
 import Ruins from './Ruins'
+import ShorePlants from './ShorePlants'
 import Rocks from './Rocks'
 import Plateau from './Plateau'
 import Sea from './Sea'
@@ -64,24 +68,29 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       <CameraRig />
       <CursorField />
       {debug.shadow && <PianoShadow />}
+      {debug.shadow && <BeachShadow />}
 
-      <hemisphereLight args={['#8f86c8', '#20255e', 1.2]} />
+      {/* Ground colour: light bounced up from the lavender field onto the piano. */}
+      <hemisphereLight args={['#8f86c8', '#2c2a6c', 1.2]} />
       <directionalLight position={SUN_DIR.clone().multiplyScalar(100)} color="#f5c8d0" intensity={2.2} />
       <directionalLight position={[-6, 4, 12]} color="#8a8fe0" intensity={0.9} />
       <pointLight position={[-1.45, 0.35, 4.3]} color="#6f9bff" intensity={1.4} distance={4} decay={2} />
 
       <Sky />
-      <Sea reflection={debug.reflection ? q.reflection : 0} />
+      <Sea reflection={debug.reflection ? q.reflection : 0} reflectAll={q.reflectAll} />
       <Ground />
       {grassEnabled && <Grass density={q.grassDensity} hiDist={q.grassHi} loDist={q.grassLo} />}
       {grassEnabled && <FieldFlowers />}
+      {grassEnabled && <ShorePlants />}
       {debug.flowers && <Petals count={q.petals} />}
       <Rocks />
+      <Boulders />
       <Plateau />
       <Ruins hovered={hovered} selected={selected} onHover={onHover} onSelect={onSelect} />
       <Piano />
+      {debug.life && <Life />}
 
-      <Effects godRays={q.godRays && debug.godRays} ao={q.ao && debug.ao} contact={q.contact && debug.contact} grade={debug.grade} tm={debug.tm} sanitize={debug.sanitize} msaaOverride={debug.msaa} />
+      <Effects godRays={q.godRays && debug.godRays} ao={q.ao && debug.ao} contact={q.contact && debug.contact} flare={debug.flare} grade={debug.grade} tm={debug.tm} sanitize={debug.sanitize} msaaOverride={debug.msaa} />
     </Canvas>
   )
 }

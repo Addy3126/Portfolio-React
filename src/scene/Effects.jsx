@@ -134,6 +134,78 @@ class ContactShadowEffect extends Effect {
   }
 }
 
+// Sun lens flare (as the WebGPU scene): sun visibility from the depth buffer on a small ring
+// around it, then ghosts along the line through the screen centre, a faint halo and a soft
+// horizontal streak. Analytic, so it can't flicker.
+const GHOSTS = [
+  [0.55, 0.035, [0.55, 0.45, 0.9]],
+  [0.95, 0.02, [0.9, 0.6, 0.75]],
+  [1.35, 0.06, [0.4, 0.5, 1.0]],
+  [1.7, 0.028, [0.75, 0.55, 1.0]],
+  [2.15, 0.09, [0.35, 0.3, 0.8]],
+]
+const f3 = (a) => `vec3(${a.map((x) => x.toFixed(3)).join(', ')})`
+class LensFlareEffect extends Effect {
+  constructor() {
+    super(
+      'LensFlareEffect',
+      /* glsl */ `
+      uniform vec2 uSun;
+      uniform float uSunOn;
+      uniform float uAspect;
+      uniform float uNear;
+      uniform float uFar;
+      float viewZAt(vec2 p) {
+        float d = readDepth(p);
+        return (uNear * uFar) / ((uFar - uNear) * d - uFar);
+      }
+      void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+        outputColor = inputColor;
+        if (uSunOn < 0.5) return;
+        float vis = 0.0;
+        for (int k = 0; k < 12; k++) {
+          float a = float(k) / 12.0 * 6.2831853;
+          float r = mod(float(k), 2.0) > 0.5 ? 0.006 : 0.012;
+          vis += 1.0 - smoothstep(-1450.0, -1300.0, viewZAt(uSun + vec2(cos(a), sin(a)) * r / vec2(uAspect, 1.0)));
+        }
+        // (GLSL smoothstep needs edge0 < edge1, hence the 1 - smoothstep forms.)
+        vis *= smoothstep(-0.1, 0.05, uSun.x) * (1.0 - smoothstep(0.95, 1.1, uSun.x)) * smoothstep(-0.1, 0.05, uSun.y) * (1.0 - smoothstep(0.95, 1.1, uSun.y)) / 12.0;
+        if (vis < 0.001) return;
+        vec2 A = vec2(uAspect, 1.0);
+        vec2 toC = vec2(0.5) - uSun;
+        vec3 res = vec3(0.0);
+        ${GHOSTS.map(([f, r, t]) => `{ float d = length((uv - (uSun + toC * ${f.toFixed(3)})) * A);
+          res += ${f3(t)} * (1.0 - smoothstep(${(r * 0.55).toFixed(4)}, ${r.toFixed(4)}, d)) * (0.55 + 0.45 * smoothstep(${(r * 0.4).toFixed(4)}, ${r.toFixed(4)}, d)) * 0.16; }`).join('\n        ')}
+        float hd = length((uv - (uSun + toC)) * A);
+        res += vec3(0.5, 0.42, 0.85) * exp(-abs(hd - 0.32) * 60.0) * 0.03;
+        vec2 ds = (uv - uSun) * A;
+        res += vec3(0.75, 0.7, 1.0) * exp(-abs(ds.y) * 320.0) * exp(-abs(ds.x) * 4.5) * 0.32;
+        res += vec3(1.0, 0.85, 0.8) * exp(-length(ds) * 14.0) * 0.12;
+        outputColor = vec4(inputColor.rgb + res * vis, inputColor.a);
+      }`,
+      {
+        attributes: EffectAttribute.DEPTH,
+        uniforms: new Map([
+          ['uSun', new THREE.Uniform(new THREE.Vector2(0.5, 0.5))],
+          ['uSunOn', new THREE.Uniform(0)],
+          ['uAspect', new THREE.Uniform(1)],
+          ['uNear', new THREE.Uniform(0.1)],
+          ['uFar', new THREE.Uniform(3000)],
+        ]),
+      },
+    )
+    this._v = new THREE.Vector3()
+  }
+  track(camera, aspect) {
+    const v = this._v.copy(camera.position).addScaledVector(SUN_DIR, 1400).project(camera)
+    this.uniforms.get('uSun').value.set(v.x * 0.5 + 0.5, v.y * 0.5 + 0.5)
+    this.uniforms.get('uSunOn').value = v.z < 1 ? 1 : 0
+    this.uniforms.get('uAspect').value = aspect
+    this.uniforms.get('uNear').value = camera.near
+    this.uniforms.get('uFar').value = camera.far
+  }
+}
+
 // Light source for the shafts: a bright disc where the sky draws the sun.
 // It is never added to the scene; the god-rays pass renders it on its own.
 function useSunSource() {
@@ -149,13 +221,15 @@ function useSunSource() {
 
 // Depth of field was removed: its half-resolution blur produced invalid pixels on the
 // piano's lacquer (black 2x2 specks) on some GPUs.
-export default function Effects({ godRays = true, ao = false, contact = false, grade = true, tm = null, sanitize = true, msaaOverride = null }) {
+export default function Effects({ godRays = true, ao = false, contact = false, flare = true, grade = true, tm = null, sanitize = true, msaaOverride = null }) {
   const sun = useSunSource()
   const composer = useRef()
   const contactFx = useMemo(() => (contact ? new ContactShadowEffect() : null), [contact])
+  const flareFx = useMemo(() => (flare ? new LensFlareEffect() : null), [flare])
 
-  useFrame(({ camera }) => {
+  useFrame(({ camera, size }) => {
     contactFx?.track(camera)
+    flareFx?.track(camera, size.width / size.height)
     if (godRays) {
       sun.position.copy(camera.position).addScaledVector(SUN_DIR, SUN_DISTANCE)
       sun.updateMatrixWorld()
@@ -186,6 +260,7 @@ export default function Effects({ godRays = true, ao = false, contact = false, g
           resolutionScale={0.5}
         />
       )}
+      {flareFx && <primitive object={flareFx} />}
       <ToneMapping mode={TM[tm] ?? ToneMappingMode.NEUTRAL} />
       {grade && <Grade />}
       {msaa === 0 && <SMAA />}

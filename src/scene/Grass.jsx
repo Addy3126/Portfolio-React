@@ -106,6 +106,8 @@ attribute vec2 iExtra;  // stiffness, kind (0 blade, 1 seed stalk)
 uniform float uTime;
 uniform float uMotion;
 uniform vec2 uCursor;
+uniform float uGrassFar;
+uniform float uGrassHi;
 uniform float uCursorStrength;
 varying float vT;
 varying float vRand;
@@ -122,6 +124,14 @@ void main(){
   float yaw = iParams.x, hgt = iParams.y, wid = iParams.z, rnd = iParams.w;
   float stiff = iExtra.x, kind = iExtra.y;
   vec3 base = iOffset;
+  // Smooth hand-overs, so no edge or pop shows (as in Ghost of Tsushima): blades shrink
+  // away over the last metres before the field turns into the painted carpet, and the
+  // extra folded blade of the close level fades out before tiles switch to the far level.
+  float camD = length(iOffset.xz - cameraPosition.xz);
+  float shrink = 1.0;
+  #ifdef FADE_FAR
+    shrink = 1.0 - smoothstep(uGrassFar - 8.0, uGrassFar - 2.0, camD);
+  #endif
 
   float t;
   #ifdef LOD_HI
@@ -132,6 +142,7 @@ void main(){
         yaw += 2.4 + rnd * 1.2;
         base.xz += vec2(cos(yaw), sin(yaw)) * 0.035;
         hgt *= 0.85;
+        shrink *= 1.0 - smoothstep(uGrassHi - 3.0, uGrassHi - 0.5, camD);
       }
     } else {
       t = (part + aT) * 0.5;
@@ -140,6 +151,8 @@ void main(){
     t = aT;
   #endif
 
+  hgt *= shrink;
+  wid *= shrink;
   float c = cos(yaw), s = sin(yaw);
   vec3 sideAxis = vec3(c, 0.0, s);
   vec2 fwd = vec2(-s, c);
@@ -271,12 +284,12 @@ void main(){
 }
 `
 
-function makeMaterial(hi) {
+function makeMaterial(hi, fadeFar = true) {
   return new THREE.ShaderMaterial({
     vertexShader: vertex,
     fragmentShader: fragment,
     side: THREE.DoubleSide,
-    defines: hi ? { LOD_HI: '' } : {},
+    defines: { ...(hi ? { LOD_HI: '' } : {}), ...(fadeFar ? { FADE_FAR: '' } : {}) },
     uniforms: {
       ...shared,
       cBase: { value: color(palette.grassBase) },
@@ -382,7 +395,8 @@ export function seeded(seed) {
 // density: blades per m^2 at the back of the field (more near the camera);
 // hiDist / loDist: distance (m) up to which detailed / simple blades are drawn.
 export default function Grass({ density = 140, hiDist = 10, loDist = 28 }) {
-  const materials = useMemo(() => ({ hi: makeMaterial(true), lo: makeMaterial(false) }), [])
+  // Spit tiles stay on at any distance (sparse, no carpet under them), so they don't fade.
+  const materials = useMemo(() => ({ hi: makeMaterial(true), lo: makeMaterial(false), loSpit: makeMaterial(false, false) }), [])
   const templates = useMemo(() => ({ hi: bladeTemplate(4, 2), lo: bladeTemplate(3, 1) }), [])
 
   const tiles = useMemo(() => {
@@ -406,7 +420,7 @@ export default function Grass({ density = 140, hiDist = 10, loDist = 28 }) {
           return m
         }
         window.__grassBlades = (window.__grassBlades || 0) + tile.count
-        list.push({ center: tile.center, spit: tile.center.z < -12, hi: make(templates.hi, materials.hi), lo: make(templates.lo, materials.lo) })
+        list.push({ center: tile.center, spit: tile.center.z < -12, hi: make(templates.hi, materials.hi), lo: make(templates.lo, tile.center.z < -12 ? materials.loSpit : materials.lo) })
       }
     return list
   }, [density, templates, materials])
@@ -423,6 +437,7 @@ export default function Grass({ density = 140, hiDist = 10, loDist = 28 }) {
   // Let the ground paint a grass carpet where blades stop.
   useEffect(() => {
     shared.uGrassFar.value = loDist
+    shared.uGrassHi.value = hiDist
   }, [loDist])
 
   useFrame(({ camera }) => {
