@@ -174,11 +174,10 @@ export function Probe() {
 export const pace = { fps: 60 }
 // Highest rate the scene renders at automatically.
 const MAX_FPS = 75
-const RATES = [48, 50, 60, 72, 75, 90, 100, 120, 144, 165, 240]
 
 // Drives the on-demand render loop. With no fixed rate (the default) it renders on every
 // k-th display refresh, k picked so the rate is at most MAX_FPS: 60 Hz and 120 Hz screens
-// get 60 fps, 144 Hz gets 72. An even divisor of the refresh keeps every frame on screen
+// get 60 fps, 144 Hz gets 72, 200 Hz gets 66.7. An even divisor of the refresh keeps every frame on screen
 // for the same time; a rate that doesn't divide it (45 fps on a 60 Hz screen) alternates
 // one- and two-refresh frames, which reads as judder while the camera moves.
 // `fps` > 0 pins a rate instead (?fps=), timed against the clock.
@@ -203,28 +202,38 @@ export function FrameLimiter({ fps }) {
       raf = requestAnimationFrame(tick)
       return () => cancelAnimationFrame(raf)
     }
-    // First measure the display's refresh from the gaps between animation frames, with
-    // nothing rendering (the loading screen is still up), over half a second: a low
-    // percentile, so frames held up by loading work don't count, snapped to a standard rate.
+    // The display's refresh, from the gaps between animation frames (they come every refresh
+    // whether or not we render): first over half a second with nothing rendering (the loading
+    // screen is up), then kept up to date for the whole visit, so a reading spoiled by loading
+    // work, or a window moved to another screen, corrects itself. A low percentile, so frames
+    // held up by other work don't count; no snapping to a list (screens run at 200 Hz, 100 Hz…).
     const gaps = []
     let last = 0
     let every = 1
     let n = 0
+    let refresh = 0
+    let ticks = 0
+    const estimate = () => {
+      const sorted = [...gaps].sort((a, b) => a - b)
+      const hz = Math.round(1000 / sorted[Math.floor(sorted.length * 0.1)])
+      if (Math.abs(hz - refresh) <= Math.max(2, refresh * 0.03)) return // same screen, noise
+      refresh = hz
+      every = Math.max(1, Math.ceil(refresh / MAX_FPS - 0.01))
+      pace.fps = refresh / every
+      window.__pace = { refresh, every, fps: Math.round(pace.fps * 10) / 10 }
+    }
     const tick = (t) => {
       raf = requestAnimationFrame(tick)
-      if (gaps.length < 30) {
-        if (last) gaps.push(t - last)
-        last = t
-        if (gaps.length === 30) {
-          const sorted = [...gaps].sort((a, b) => a - b)
-          const hz = 1000 / sorted[Math.floor(sorted.length * 0.2)]
-          const refresh = RATES.reduce((a, b) => (Math.abs(b - hz) < Math.abs(a - hz) ? b : a))
-          every = Math.max(1, Math.ceil(refresh / MAX_FPS - 0.01))
-          pace.fps = refresh / every
-          window.__pace = { refresh, every, fps: pace.fps }
-        }
+      if (last && t - last < 100) {
+        gaps.push(t - last)
+        if (gaps.length > 240) gaps.shift()
+      }
+      last = t
+      if (!refresh) {
+        if (gaps.length >= 30) estimate()
         return
       }
+      if (++ticks % 120 === 0) estimate()
       if (++n % every === 0) invalidate()
     }
     raf = requestAnimationFrame(tick)

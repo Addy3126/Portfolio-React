@@ -29,11 +29,11 @@ function Hud() {
       const st = window.__stats
       const cv = document.querySelector('canvas')
       const iv = p?.intervals ?? []
-      const fps = iv.length ? 1000 / (iv.reduce((a, b) => a + b, 0) / iv.length) : null
+      const fps = iv.length ? 1000 / pct(iv, 0.5) : null // median: one long pause doesn't skew it
       const budget = 1000 / (window.__pace?.fps ?? 60)
       const long = iv.filter((v) => v > budget * 1.6).length
       setLines([
-        `${window.__backend ?? 'webgl'} · ${c ? `${c.tier} · ${Math.round(c.scale * 100)}%` : `${tier} · ${qualitySource}…`} · ${cv ? `${cv.width}×${cv.height}` : ''} · target ${Math.round(1000 / budget)} fps`,
+        `${window.__backend ?? 'webgl'} · ${c ? `${c.tier} · ${Math.round(c.scale * 100)}%` : `${tier} · ${qualitySource}…`} · ${cv ? `${cv.width}×${cv.height}` : ''} · target ${Math.round(1000 / budget)} fps${window.__pace ? ` (${window.__pace.refresh} Hz ÷ ${window.__pace.every})` : ''}`,
         `${f(fps)} fps · frame ${f(pct(iv, 0.5))} / ${f(pct(iv, 0.95))} ms (p50/p95) · ${long} long of ${iv.length}`,
         `main thread ${f(pct(p?.cpu, 0.5))} / ${f(pct(p?.cpu, 0.95))} ms · GPU ${p?.gpu?.length ? `${f(pct(p.gpu, 0.5))} ms` : 'n/a (no timestamps)'}`,
         `${st ? `${st.calls} draws · ${(st.triangles / 1e6).toFixed(2)}M tris` : ''}${c ? ` · settled in ${(c.ms / 1000).toFixed(1)} s${c.steps.length ? `: ${c.steps.join(' → ')}` : ` (${qualitySource})`}` : ''}`,
