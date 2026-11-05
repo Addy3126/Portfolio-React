@@ -5,31 +5,53 @@ import PianoBar from './overlay/PianoBar'
 import { enterPlay, exitPlay } from './piano/engine'
 import usePianoKeyboard from './piano/usePianoKeyboard'
 import { SECTIONS, motion } from './store'
-import { hasWebGL, reducedMotion } from './quality'
+import { debug, gpuLabel, hasWebGL, isWindows, qualitySource, reducedMotion, tier } from './quality'
 
 // Renderer: the WebGPU scene where the browser has WebGPU, the WebGL scene otherwise (and if
 // WebGPU fails to start or its device is lost). ?renderer=webgl / ?renderer=webgpu force one.
 const ExperienceGPU = lazy(() => import('./gpu/ExperienceGPU'))
 const ExperienceGL = lazy(() => import('./scene/Experience'))
 const forced = new URLSearchParams(window.location.search).get('renderer')
-const hud = new URLSearchParams(window.location.search).get('hud') === '1'
-
-// ?hud=1: a small readout of the renderer, quality tier, render scale and frame time.
+// ?hud=1 (or ?stats=1): a readout of the renderer, the settled quality and how frames are
+// doing, for checking performance on a real machine.
 function Hud() {
-  const [text, setText] = useState('')
+  const [lines, setLines] = useState(['starting…'])
   useEffect(() => {
+    const pct = (arr, p) => {
+      if (!arr?.length) return null
+      const a = [...arr].sort((x, y) => x - y)
+      return a[Math.min(a.length - 1, Math.floor(a.length * p))]
+    }
+    const f = (v) => (v === null || v === undefined ? '–' : v.toFixed(1))
     const id = setInterval(() => {
-      const a = window.__adaptive
-      setText(`${window.__backend ?? 'webgl'} · ${a ? `${a.tier} · ${Math.round(a.scale * 100)}% · ${a.avg} ms` : 'measuring…'}`)
+      const p = window.__perf
+      const c = window.__calibration
+      const st = window.__stats
+      const cv = document.querySelector('canvas')
+      const iv = p?.intervals ?? []
+      const fps = iv.length ? 1000 / (iv.reduce((a, b) => a + b, 0) / iv.length) : null
+      const budget = 1000 / (window.__pace?.fps ?? 60)
+      const long = iv.filter((v) => v > budget * 1.6).length
+      setLines([
+        `${window.__backend ?? 'webgl'} · ${c ? `${c.tier} · ${Math.round(c.scale * 100)}%` : `${tier} · ${qualitySource}…`} · ${cv ? `${cv.width}×${cv.height}` : ''} · target ${Math.round(1000 / budget)} fps`,
+        `${f(fps)} fps · frame ${f(pct(iv, 0.5))} / ${f(pct(iv, 0.95))} ms (p50/p95) · ${long} long of ${iv.length}`,
+        `main thread ${f(pct(p?.cpu, 0.5))} / ${f(pct(p?.cpu, 0.95))} ms · GPU ${p?.gpu?.length ? `${f(pct(p.gpu, 0.5))} ms` : 'n/a (no timestamps)'}`,
+        `${st ? `${st.calls} draws · ${(st.triangles / 1e6).toFixed(2)}M tris` : ''}${c ? ` · settled in ${(c.ms / 1000).toFixed(1)} s${c.steps.length ? `: ${c.steps.join(' → ')}` : ` (${qualitySource})`}` : ''}`,
+        gpuLabel,
+      ])
     }, 500)
     return () => clearInterval(id)
   }, [])
-  return <div style={{ position: 'fixed', left: 12, bottom: 12, zIndex: 50, font: '12px monospace', color: '#fff', background: 'rgba(0,0,0,.55)', padding: '4px 8px', borderRadius: 4, pointerEvents: 'none' }}>{text}</div>
+  return (
+    <div style={{ position: 'fixed', left: 12, bottom: 12, zIndex: 50, font: '11px/1.45 monospace', color: '#fff', background: 'rgba(0,0,0,.7)', padding: '6px 9px', borderRadius: 4, pointerEvents: 'none', maxWidth: 'calc(100vw - 24px)', whiteSpace: 'pre-wrap' }}>
+      {lines.join('\n')}
+    </div>
+  )
 }
 async function pickRenderer() {
   if (forced === 'webgl' || forced === 'webgpu') return forced
   try {
-    const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' })
+    const adapter = await navigator.gpu?.requestAdapter(isWindows ? undefined : { powerPreference: 'high-performance' })
     return adapter ? 'webgpu' : 'webgl'
   } catch {
     return 'webgl'
@@ -134,7 +156,7 @@ export default function App() {
       ) : (
         <div className="scene fallback" role="img" aria-label="Twilight field with an empty grand piano" />
       )}
-      {hud && <Hud />}
+      {debug.hud && <Hud />}
       {!loaderGone && (
       <div className={`loader ${ready ? 'done' : ''}`} aria-hidden={ready}>
         <span>Tuning the piano</span>

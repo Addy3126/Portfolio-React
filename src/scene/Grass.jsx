@@ -132,6 +132,14 @@ void main(){
   #ifdef FADE_FAR
     shrink = 1.0 - smoothstep(uGrassFar - 8.0, uGrassFar - 2.0, camD);
   #endif
+  // Level of detail per blade: the close level draws blades nearer than uGrassHi, the far
+  // level the rest (zero-size blades are dropped before shading). Per blade rather than per
+  // tile, so the far level can be drawn in large chunks (a few draw calls, not dozens).
+  #ifdef LOD_HI
+    shrink *= 1.0 - step(uGrassHi, camD);
+  #else
+    shrink *= step(uGrassHi, camD);
+  #endif
 
   float t;
   #ifdef LOD_HI
@@ -386,6 +394,62 @@ export function buildTile(tx, tz, base, rand) {
   }
 }
 
+// The whole field, built once per density, in two groupings of the same blades:
+// - tiles (TILE metres square) for the close level, drawn only near the camera;
+// - chunks of CHUNK x CHUNK tiles for the far level: a few dozen draw calls became a
+//   handful (each draw has a fixed cost on the main thread, and the far level covers most
+//   of the field). The shaders pick the level per blade by distance (uGrassHi), so the two
+//   never overlap however the tiles and chunks line up.
+// The spit's grass is kept apart (own chunks): it stays on at any distance and is the only
+// grass the sea can reflect.
+const CHUNK = 3
+export function buildField(density) {
+  const rand = seeded(1234)
+  const tiles = []
+  const groups = new Map()
+  for (let tx = Math.floor(FIELD.x0 / TILE); tx < Math.ceil(FIELD.x1 / TILE); tx++)
+    for (let tz = Math.floor(FIELD.z0 / TILE); tz < Math.ceil(FIELD.z1 / TILE); tz++) {
+      const tile = buildTile(tx, tz, density, rand)
+      if (!tile) continue
+      const spit = tile.center.z < -12
+      const box = [tx * TILE, tz * TILE, (tx + 1) * TILE, (tz + 1) * TILE]
+      tiles.push({ ...tile, spit, box, sphere: boxSphere(box) })
+      const key = `${Math.floor(tx / CHUNK)},${Math.floor(tz / CHUNK)},${spit}`
+      if (!groups.has(key)) groups.set(key, { spit, parts: [], box: [Infinity, Infinity, -Infinity, -Infinity] })
+      const g = groups.get(key)
+      g.parts.push(tile)
+      g.box = [Math.min(g.box[0], box[0]), Math.min(g.box[1], box[1]), Math.max(g.box[2], box[2]), Math.max(g.box[3], box[3])]
+    }
+  const chunks = [...groups.values()].map(({ spit, parts, box }) => {
+    const attrs = {}
+    for (const k of Object.keys(parts[0].attrs)) {
+      const size = parts[0].attrs[k].itemSize
+      const arr = new Float32Array(parts.reduce((n, t) => n + t.attrs[k].array.length, 0))
+      let o = 0
+      for (const t of parts) {
+        arr.set(t.attrs[k].array, o)
+        o += t.attrs[k].array.length
+      }
+      attrs[k] = new THREE.InstancedBufferAttribute(arr, size)
+    }
+    return { spit, attrs, count: parts.reduce((n, t) => n + t.count, 0), box, sphere: boxSphere(box) }
+  })
+  window.__grassBlades = tiles.reduce((n, t) => n + t.count, 0)
+  return { tiles, chunks }
+}
+function boxSphere([x0, z0, x1, z1]) {
+  return new THREE.Sphere(new THREE.Vector3((x0 + x1) / 2, 0.4, (z0 + z1) / 2), Math.hypot(x1 - x0, z1 - z0) / 2 + 1.2)
+}
+// Horizontal distance from (x, z) to the nearest and farthest points of a box [x0, z0, x1, z1].
+export const nearest = (b, x, z) => Math.hypot(Math.max(b[0] - x, 0, x - b[2]), Math.max(b[1] - z, 0, z - b[3]))
+export const farthest = (b, x, z) => Math.hypot(Math.max(x - b[0], b[2] - x), Math.max(z - b[1], b[3] - z))
+// Which meshes draw this frame: close-level tiles that reach within hiDist, far-level chunks
+// that reach past hiDist and within loDist (spit chunks always).
+export function updateField(field, cam, hiDist, loDist) {
+  for (const t of field.tiles) t.hi.visible = hiDist > 0 && nearest(t.box, cam.x, cam.z) < hiDist
+  for (const c of field.chunks) c.lo.visible = c.spit || (nearest(c.box, cam.x, cam.z) < loDist && farthest(c.box, cam.x, cam.z) >= hiDist)
+}
+
 export function seeded(seed) {
   let s = seed
   return () => {
@@ -401,61 +465,42 @@ export default function Grass({ density = 140, hiDist = 10, loDist = 28 }) {
   const materials = useMemo(() => ({ hi: makeMaterial(true), lo: makeMaterial(false), loSpit: makeMaterial(false, false) }), [])
   const templates = useMemo(() => ({ hi: bladeTemplate(4, 2), lo: bladeTemplate(3, 1) }), [])
 
-  const tiles = useMemo(() => {
-    const rand = seeded(1234)
-    const list = []
-    for (let tx = Math.floor(FIELD.x0 / TILE); tx < Math.ceil(FIELD.x1 / TILE); tx++)
-      for (let tz = Math.floor(FIELD.z0 / TILE); tz < Math.ceil(FIELD.z1 / TILE); tz++) {
-        const tile = buildTile(tx, tz, density, rand)
-        if (!tile) continue
-        const sphere = new THREE.Sphere(tile.center, TILE * 0.75 + 1.2)
-        const make = (tpl, mat) => {
-          const g = new THREE.InstancedBufferGeometry()
-          g.setAttribute('position', tpl.position)
-          g.setIndex(tpl.index)
-          for (const [k, a] of Object.entries(tile.attrs)) g.setAttribute(k, a)
-          g.instanceCount = tile.count
-          g.boundingSphere = sphere
-          const m = new THREE.Mesh(g, mat)
-          m.frustumCulled = true
-          m.visible = false
-          return m
-        }
-        window.__grassBlades = (window.__grassBlades || 0) + tile.count
-        list.push({ center: tile.center, spit: tile.center.z < -12, hi: make(templates.hi, materials.hi), lo: make(templates.lo, tile.center.z < -12 ? materials.loSpit : materials.lo) })
-      }
-    return list
+  const field = useMemo(() => {
+    const f = buildField(density)
+    const make = (part, tpl, mat) => {
+      const g = new THREE.InstancedBufferGeometry()
+      g.setAttribute('position', tpl.position)
+      g.setIndex(tpl.index)
+      for (const [k, a] of Object.entries(part.attrs)) g.setAttribute(k, a)
+      g.instanceCount = part.count
+      g.boundingSphere = part.sphere
+      const m = new THREE.Mesh(g, mat)
+      m.visible = false
+      return m
+    }
+    for (const t of f.tiles) t.hi = make(t, templates.hi, materials.hi)
+    for (const c of f.chunks) c.lo = make(c, templates.lo, c.spit ? materials.loSpit : materials.lo)
+    return f
   }, [density, templates, materials])
 
   useEffect(
-    () => () =>
-      tiles.forEach((t) => {
-        t.hi.geometry.dispose()
-        t.lo.geometry.dispose()
-      }),
-    [tiles],
+    () => () => [...field.tiles.map((t) => t.hi), ...field.chunks.map((c) => c.lo)].forEach((m) => m.geometry.dispose()),
+    [field],
   )
 
   // Let the ground paint a grass carpet where blades stop.
   useEffect(() => {
     shared.uGrassFar.value = loDist
     shared.uGrassHi.value = hiDist
-  }, [loDist])
+  }, [loDist, hiDist])
 
-  useFrame(({ camera }) => {
-    for (const t of tiles) {
-      const d = Math.hypot(t.center.x - camera.position.x, t.center.z - camera.position.z)
-      t.hi.visible = d < hiDist
-      // Sparse spit tiles are cheap: keep them on so nothing pops in as the camera flies out.
-      t.lo.visible = d >= hiDist && (d < loDist || t.spit)
-    }
-  })
+  useFrame(({ camera }) => updateField(field, camera.position, hiDist, loDist))
 
   const group = useRef()
-  const field = useRef()
+  const field_ = useRef()
   useEffect(() => {
     const g = group.current
-    const f = field.current
+    const f = field_.current
     hideInReflection.add(g)
     neverReflected.add(f)
     return () => {
@@ -464,16 +509,15 @@ export default function Grass({ density = 140, hiDist = 10, loDist = 28 }) {
     }
   }, [])
 
-  const tile = (t, i) => (
-    <group key={i}>
-      <primitive object={t.hi} />
-      <primitive object={t.lo} />
-    </group>
-  )
+  // Field grass in its own group (left out of the sea reflection, see world.neverReflected).
   return (
     <group ref={group}>
-      <group ref={field}>{tiles.filter((t) => !t.spit).map(tile)}</group>
-      {tiles.filter((t) => t.spit).map(tile)}
+      <group ref={field_}>
+        {field.tiles.filter((t) => !t.spit).map((t, i) => <primitive key={`t${i}`} object={t.hi} />)}
+        {field.chunks.filter((c) => !c.spit).map((c, i) => <primitive key={`c${i}`} object={c.lo} />)}
+      </group>
+      {field.tiles.filter((t) => t.spit).map((t, i) => <primitive key={`st${i}`} object={t.hi} />)}
+      {field.chunks.filter((c) => c.spit).map((c, i) => <primitive key={`sc${i}`} object={c.lo} />)}
     </group>
   )
 }

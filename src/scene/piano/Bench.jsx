@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
+import { mergeStatic } from '../mergeStatic'
 import { lathe, roundedRect } from './geometry'
 import { noiseBump } from './textures'
 
@@ -96,7 +97,8 @@ export default function Bench({ design, lacquer, brass, glow }) {
       tuft: new THREE.MeshStandardMaterial({ color: '#060508', roughness: 0.6 }),
       velvet: new THREE.MeshPhysicalMaterial({ color: '#2a2466', roughness: 0.9, sheen: 1, sheenColor: new THREE.Color('#7b6ae0'), sheenRoughness: 0.5, bumpMap: noiseBump({ seed: 11, dots: 6000, minR: 0.3, maxR: 0.9, repeat: [4, 4] }), bumpScale: 0.3 }),
     }
-    return design.bench === 'artist' ? artistBench(m) : design.bench === 'duet' ? duetBench(m) : curvedBench(m)
+    const list = design.bench === 'artist' ? artistBench(m) : design.bench === 'duet' ? duetBench(m) : curvedBench(m)
+    return [...list, ...mergeStatic(list)] // one draw per material (see mergeStatic)
   }, [design, lacquer, brass, glow])
 
   return (

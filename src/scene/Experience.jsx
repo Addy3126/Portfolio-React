@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { autoQualityEnabled, debug, rockShadowSize, grassEnabled, settingsFor, tier as startTier } from '../quality'
+import { debug, dprFor, grassEnabled, rockShadowSize, settingsFor, startScale, tier as startTier } from '../quality'
 import CameraRig from './CameraRig'
 import CursorField from './CursorField'
 import Effects from './Effects'
@@ -12,7 +12,7 @@ import Life from './Life'
 import ScannedRocks from './ScannedRocks'
 import FillLight from './FillLight'
 import PlayEffects from './PlayEffects'
-import { Adaptive, FrameLimiter, Stats, Warmup, statsOn } from './Perf'
+import { FrameLimiter, Probe, Startup } from './Perf'
 import Petals from './Petals'
 import Piano from './Piano'
 import BeachShadow from './BeachShadow'
@@ -34,13 +34,15 @@ function Clock() {
 }
 
 export default function Experience({ hovered, selected, onHover, onSelect, onReady }) {
-  const [tier, setTier] = useState(startTier)
+  // Settled by the calibration while the loading screen is up, then fixed (scene/Perf.jsx).
+  const [{ tier, scale }, setQuality] = useState({ tier: startTier, scale: startScale })
   const q = useMemo(() => settingsFor(tier), [tier])
+  const onQuality = useCallback((t, sc) => setQuality({ tier: t, scale: sc }), [])
   return (
     <Canvas
       className="scene"
       frameloop={debug.fps === 0 ? 'always' : 'demand'}
-      dpr={q.dpr}
+      dpr={dprFor(q, scale)}
       shadows={rockShadowSize > 0}
       camera={{ fov: 42, near: 0.1, far: 3000, position: [0, 1, 9] }}
       gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }}
@@ -56,10 +58,9 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       onPointerMissed={() => onSelect(null)}
     >
       {debug.fps !== 0 && <FrameLimiter fps={debug.fps} />}
-      {autoQualityEnabled && debug.fps !== 0 && <Adaptive tier={tier} onTier={setTier} startTier={startTier} baseDpr={q.dpr[1]} />}
       <Clock />
-      <Warmup onDone={onReady} />
-      {statsOn && <Stats />}
+      <Startup tier={tier} scale={scale} onQuality={onQuality} onDone={onReady} />
+      <Probe />
       <CameraRig />
       <CursorField />
       {debug.shadow && <PianoShadow />}

@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
 import {
-  Break,
-  Continue,
   Fn,
   If,
   Loop,
@@ -99,25 +97,27 @@ const bakeColor = Fn(() => {
       const t = t0.add(float(i).add(0.5).mul(dt))
       const p = d.mul(t)
       const den = density(p, cov)
-      If(den.lessThanEqual(0.003), () => Continue())
-      // Light march toward the sun (cheap density).
-      const od = float(0.0).toVar()
-      const lp = vec3(p).toVar()
-      for (let j = 1; j <= 5; j++) {
-        lp.addAssign(u.sunDir.mul(0.09 * j))
-        od.addAssign(densityLo(lp, cov).mul(0.09 * j))
-      }
-      const odS = od.mul(SIGMA * 1.7)
-      const beer = exp(odS.negate())
-      const powder = float(1.0).sub(exp(odS.mul(-2.0)))
-      const lightE = beer.mul(mix(1.0, powder.mul(2.0), 0.5))
-      const hf = clamp(p.y.sub(SLAB0).div(SLAB1 - SLAB0), 0.0, 1.0)
-      const ambient = mix(c(palette.cloud).mul(0.32), c(palette.cloudLit).mul(0.38), hf.mul(hf)).add(c(palette.upper).mul(0.12))
-      const S = sunCol.mul(lightE).mul(phase).add(ambient)
-      const a = exp(den.mul(SIGMA).mul(dt).negate())
-      scat.addAssign(S.mul(T).mul(float(1.0).sub(a)))
-      T.mulAssign(a)
-      If(T.lessThan(0.02), () => Break())
+      // Only where there is cloud, and until the view is all but blocked. (A guard rather
+      // than continue/break: TSL emits those so that WGSL warns of unreachable code.)
+      If(den.greaterThan(0.003).and(T.greaterThanEqual(0.02)), () => {
+        // Light march toward the sun (cheap density).
+        const od = float(0.0).toVar()
+        const lp = vec3(p).toVar()
+        for (let j = 1; j <= 5; j++) {
+          lp.addAssign(u.sunDir.mul(0.09 * j))
+          od.addAssign(densityLo(lp, cov).mul(0.09 * j))
+        }
+        const odS = od.mul(SIGMA * 1.7)
+        const beer = exp(odS.negate())
+        const powder = float(1.0).sub(exp(odS.mul(-2.0)))
+        const lightE = beer.mul(mix(1.0, powder.mul(2.0), 0.5))
+        const hf = clamp(p.y.sub(SLAB0).div(SLAB1 - SLAB0), 0.0, 1.0)
+        const ambient = mix(c(palette.cloud).mul(0.32), c(palette.cloudLit).mul(0.38), hf.mul(hf)).add(c(palette.upper).mul(0.12))
+        const S = sunCol.mul(lightE).mul(phase).add(ambient)
+        const a = exp(den.mul(SIGMA).mul(dt).negate())
+        scat.addAssign(S.mul(T).mul(float(1.0).sub(a)))
+        T.mulAssign(a)
+      })
     })
     const fade = smoothstep(0.004, 0.03, h)
     const aerial = float(1.0).sub(exp(t0.mul(-0.02)))

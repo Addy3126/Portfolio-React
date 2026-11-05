@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Canvas, extend, useFrame } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
-import { autoQualityEnabled, debug, rockShadowSize, grassEnabled, settingsFor, tier as startTier } from '../quality'
+import { calibrate, debug, dprFor, grassEnabled, isWindows, rockShadowSize, settingsFor, startScale, tier as startTier } from '../quality'
 import CameraRig from '../scene/CameraRig'
 import CursorField from '../scene/CursorField'
 import Piano from '../scene/Piano'
@@ -11,7 +11,7 @@ import ScannedRocks from '../scene/ScannedRocks'
 import FillLight from '../scene/FillLight'
 import './scanMaterial'
 import PlayEffects from '../scene/PlayEffects'
-import { Adaptive, FrameLimiter, Stats, Warmup, statsOn } from '../scene/Perf'
+import { FrameLimiter, Probe, Startup } from '../scene/Perf'
 import { SUN_DIR, shared } from '../scene/world'
 import EffectsGPU from './EffectsGPU'
 import { FieldFlowersGPU, PetalsGPU } from './FlowersGPU'
@@ -53,7 +53,15 @@ function captureEnvGPU(gl, scene, at) {
 }
 
 async function createRenderer(props) {
-  const renderer = new THREE.WebGPURenderer({ ...props, antialias: false, powerPreference: 'high-performance', stencil: false })
+  // GPU timestamps while calibrating (and for the ?hud=1 readout). The power preference is
+  // ignored on Windows, where asking for it only logs a warning.
+  const renderer = new THREE.WebGPURenderer({
+    ...props,
+    antialias: false,
+    stencil: false,
+    trackTimestamp: calibrate || debug.hud,
+    ...(isWindows ? {} : { powerPreference: 'high-performance' }),
+  })
   await renderer.init()
   // Which backend actually came up (for the debug overlay and tests).
   window.__backend = renderer.backend.isWebGPUBackend ? 'webgpu' : 'webgl2'
@@ -107,14 +115,16 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
     }
     return r
   }, [])
-  const [tier, setTier] = useState(startTier)
+  // Settled by the calibration while the loading screen is up, then fixed (scene/Perf.jsx).
+  const [{ tier, scale }, setQuality] = useState({ tier: startTier, scale: startScale })
   const q = useMemo(() => settingsFor(tier), [tier])
+  const onQuality = useCallback((t, sc) => setQuality({ tier: t, scale: sc }), [])
   return (
     <Canvas
       className="scene"
       frameloop={debug.fps === 0 ? 'always' : 'demand'}
-      dpr={q.dpr}
-      shadows={rockShadowSize > 0}
+      dpr={dprFor(q, scale)}
+      shadows={{ enabled: rockShadowSize > 0, type: THREE.PCFShadowMap }} // (a boolean makes R3F pick PCFSoftShadowMap, which WebGPU lacks)
       camera={{ fov: 42, near: 0.1, far: 3000, position: [0, 1, 9] }}
       gl={gl}
       onCreated={({ gl, camera, scene, raycaster }) => {
@@ -128,10 +138,9 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       onPointerMissed={() => onSelect(null)}
     >
       {debug.fps !== 0 && <FrameLimiter fps={debug.fps} />}
-      {autoQualityEnabled && debug.fps !== 0 && <Adaptive tier={tier} onTier={setTier} startTier={startTier} baseDpr={q.dpr[1]} />}
       <Clock />
-      <Warmup onDone={onReady} />
-      {statsOn && <Stats />}
+      <Startup tier={tier} scale={scale} onQuality={onQuality} onDone={onReady} />
+      <Probe />
       <CameraRig />
       <CursorField />
       {debug.shadow && <PianoShadowGPU />}

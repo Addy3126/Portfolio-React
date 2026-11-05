@@ -1,7 +1,5 @@
 // Rendering tiers, lightest to richest. The starting tier is a guess from the device (GPU
-// name, memory, phone or desktop); at runtime the scene then adapts (see scene/Perf.jsx):
-// render resolution first, then the tier, down when frames run late and back up when there
-// is steady headroom. ?quality=minimal|low|mid|high|ultra pins the starting tier.
+// name, memory, phone or desktop), then measured and settled while the page loads (below).
 const TIERS = {
   minimal: { grassDensity: 53, grassHi: 0, grassLo: 14, effects: 'basic', petals: 140, dpr: [0.75, 0.75], reflection: 0 },
   low: { grassDensity: 96, grassHi: 0, grassLo: 20, effects: 'basic', petals: 320, dpr: [1, 1], reflection: 0 },
@@ -10,6 +8,12 @@ const TIERS = {
   ultra: { grassDensity: 456, grassHi: 13, grassLo: 34, effects: 'full', petals: 2000, dpr: [1, 1.5], reflection: 0.6 },
 }
 export const TIER_ORDER = ['minimal', 'low', 'mid', 'high', 'ultra']
+
+// Render resolution for a tier: the screen's pixel ratio within the tier's range, times the
+// calibrated scale.
+export function dprFor(q, scale = 1) {
+  return Math.max(q.dpr[0], Math.min(window.devicePixelRatio, q.dpr[1])) * scale
+}
 
 export function settingsFor(tierName) {
   const q = { ...TIERS[tierName] }
@@ -34,10 +38,8 @@ function gpuName() {
   }
 }
 
-function pickTier() {
-  const forced = new URLSearchParams(window.location.search).get('quality')
-  if (forced && TIERS[forced]) return forced
-  const gpu = gpuName().toLowerCase()
+// A first guess from the device; the load-time calibration (scene/Perf.jsx) then measures.
+function guessTier(gpu) {
   const coarse = window.matchMedia('(pointer: coarse)').matches
   const cores = navigator.hardwareConcurrency || 4
   const memory = navigator.deviceMemory || 8 // GB (Chrome only; capped at 8)
@@ -54,15 +56,49 @@ function pickTier() {
   return cores >= 8 ? 'high' : 'mid'
 }
 
-export const tier = pickTier()
-// Debug switches for tracking down rendering problems, e.g. ?godrays=0&reflection=0.
+// Quality is settled once, while the loading screen is up, and then fixed for the visit:
+// switching while someone browses (as an earlier adaptive scheme did) rebuilt the grass and
+// recompiled shaders each time, which itself read as lag. The calibration renders every
+// section at the guessed tier, measures the real GPU time per frame and steps down (render
+// resolution first, then tier) until the heaviest section fits the frame budget. The result
+// is remembered for this GPU and screen, so later visits skip the test.
+// ?quality=minimal|low|mid|high|ultra pins a tier (no calibration); ?recalibrate=1 measures
+// again; ?autoquality=0 keeps the guess untested.
 const params = new URLSearchParams(window.location.search)
+export const isWindows = /Windows/i.test(navigator.userAgent)
+const GPU = gpuName()
+const CACHE_KEY = 'nocturne-quality-v1'
+const deviceKey = `${GPU}|${screen.width}x${screen.height}@${window.devicePixelRatio}`
+function readCache() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null')
+    return c && c.device === deviceKey && TIERS[c.tier] ? c : null
+  } catch {
+    return null
+  }
+}
+export function saveCalibration(tierName, scale) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ device: deviceKey, tier: tierName, scale }))
+  } catch {
+    /* storage unavailable: calibrate again next time */
+  }
+}
+const forcedTier = TIERS[params.get('quality')] ? params.get('quality') : null
+const cached = forcedTier || params.get('recalibrate') === '1' ? null : readCache()
+export const tier = forcedTier ?? cached?.tier ?? guessTier(GPU.toLowerCase())
+export const startScale = cached?.scale ?? 1
+export const qualitySource = forcedTier ? 'forced' : cached ? 'remembered' : 'measuring'
+export const gpuLabel = GPU
+// Debug switches for tracking down rendering problems, e.g. ?godrays=0&reflection=0.
 // Static shadow map for the scanned rocks (texels per side; 0 = none). Fixed for the visit,
 // from the starting tier: turning shadows on or off, or resizing them, recompiles every lit
 // material, which stalled the page whenever adaptive quality changed tier.
 export const rockShadowSize = params.get('rockshadow') === '0' ? 0 : ({ ultra: 4096, high: 4096, mid: 2048 }[tier] ?? 0)
 const off = (name) => params.get(name) === '0'
 export const debug = {
+  // ?hud=1 (or ?stats=1): an on-screen readout of quality and frame timings.
+  hud: params.get('hud') === '1' || params.get('stats') === '1',
   godRays: !off('godrays'),
   sanitize: !off('sanitize'),
   reflection: !off('reflection'),
@@ -88,8 +124,7 @@ export const debug = {
 }
 // Debug: ?grass=0 hides grass and field flowers (useful for inspecting the piano).
 export const grassEnabled = new URLSearchParams(window.location.search).get('grass') !== '0'
-// Debug: ?autoquality=0 keeps the starting tier even if frames run long.
-export const autoQualityEnabled = new URLSearchParams(window.location.search).get('autoquality') !== '0'
+export const calibrate = !forcedTier && !cached && params.get('autoquality') !== '0'
 export const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 export function hasWebGL() {
