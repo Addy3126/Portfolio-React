@@ -7,7 +7,12 @@ import useLocalTime from './useLocalTime'
 function usePanelFades(refs, cue) {
   useEffect(() => {
     let raf
+    let last = NaN
     const tick = () => {
+      raf = requestAnimationFrame(tick)
+      // Only when the scroll position has moved (style writes every frame cost a style pass).
+      if (Math.abs(motion.progress - last) < 1e-4) return
+      last = motion.progress
       refs.current.forEach((el, i) => {
         if (!el) return
         const d = Math.abs(motion.progress - i)
@@ -18,7 +23,6 @@ function usePanelFades(refs, cue) {
         el.dataset.active = o > 0.5 ? 'true' : 'false'
       })
       if (cue.current) cue.current.style.opacity = (1 - smoothstep(0.02, 0.2, motion.progress)).toFixed(3)
-      raf = requestAnimationFrame(tick)
     }
     tick()
     return () => cancelAnimationFrame(raf)

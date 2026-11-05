@@ -27,7 +27,7 @@ import {
 } from 'three/tsl'
 import { FIELD, FOLD_BELOW, TILE, bladeTemplate, buildTile, seeded } from '../scene/Grass'
 import { color, palette, shared } from '../scene/world'
-import { REFLECTION_HIDDEN } from './SeaGPU'
+import { NEVER_REFLECTED, REFLECTION_HIDDEN } from './SeaGPU'
 import { pianoShadow } from './shadow'
 import { applyFog, spow, u, viewNormal, vnoise, pianoRipple } from './tsl'
 
@@ -217,6 +217,7 @@ export default function GrassGPU({ density = 140, hiDist = 10, loDist = 28 }) {
         const tile = buildTile(tx, tz, density, rand)
         if (!tile) continue
         const sphere = new THREE.Sphere(tile.center, TILE * 0.75 + 1.2)
+        const spit = tile.center.z < -12
         const make = (tpl, mat) => {
           const g = new THREE.InstancedBufferGeometry()
           g.setAttribute('position', tpl.position)
@@ -226,11 +227,11 @@ export default function GrassGPU({ density = 140, hiDist = 10, loDist = 28 }) {
           g.boundingSphere = sphere
           const m = new THREE.Mesh(g, mat)
           m.visible = false
-          m.layers.set(REFLECTION_HIDDEN)
+          m.layers.set(spit ? REFLECTION_HIDDEN : NEVER_REFLECTED)
           return m
         }
         window.__grassBlades = (window.__grassBlades || 0) + tile.count
-        list.push({ center: tile.center, spit: tile.center.z < -12, hi: make(templates.hi, materials.hi), lo: make(templates.lo, tile.center.z < -12 ? materials.loSpit : materials.lo) })
+        list.push({ center: tile.center, spit, hi: make(templates.hi, materials.hi), lo: make(templates.lo, spit ? materials.loSpit : materials.lo) })
       }
     return list
   }, [density, templates, materials])

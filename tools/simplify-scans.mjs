@@ -4,8 +4,9 @@
 //
 //   node tools/simplify-scans.mjs <src dir> public/models name:triangles[:hiTriangles] ...
 //
-// Two levels per scan: <name>.bin (everyone) and, if hiTriangles is given, <name>_hi.bin
-// (ultra tier). Each vertex also carries ambient occlusion baked against the FULL scan
+// One level per scan, <name>.bin, plus <name>_hi.bin if hiTriangles is given (the site no
+// longer ships those or the 2K maps: at the distances the rocks are seen from they only
+// added triangles per pixel; distant rocks get a lighter level from tools/lod-scans.mjs). Each vertex also carries ambient occlusion baked against the FULL scan
 // (rays cast from the simplified surface into the original mesh), so crevices and the
 // undersides of ledges stay dark even where the simplification flattened them.
 //

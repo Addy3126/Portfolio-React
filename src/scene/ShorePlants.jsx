@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { tier } from '../quality'
 import { BEACH_LAYER } from './BeachShadow'
 import { seeded } from './ruins/noise3'
-import { PIANO_POS, bankX, landDist, mainDist, shoreZ } from './world'
+import { NEVER_REFLECTED, PIANO_POS, bankX, landDist, mainDist, shoreZ } from './world'
 
 // Plants on the strip where the beach meets the field: stiff tufts of dune grass and
 // cushions of sea thrift with pink pompom flowers on wiry stems, in loose clusters, so
@@ -127,6 +127,7 @@ export default function ShorePlants() {
         mesh.setMatrixAt(i, m4)
       })
       mesh.computeBoundingSphere()
+      mesh.layers.set(NEVER_REFLECTED) // on the field's edge, behind the shore: never in the reflection
       mesh.layers.enable(BEACH_LAYER)
       return mesh
     }

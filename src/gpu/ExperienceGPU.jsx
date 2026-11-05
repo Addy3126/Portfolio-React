@@ -1,8 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { texturesReady } from '../textureReady'
 import { Canvas, extend, useFrame } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
-import { autoQualityEnabled, debug, grassEnabled, settingsFor, tier as startTier } from '../quality'
+import { autoQualityEnabled, debug, rockShadowSize, grassEnabled, settingsFor, tier as startTier } from '../quality'
 import CameraRig from '../scene/CameraRig'
 import CursorField from '../scene/CursorField'
 import Piano from '../scene/Piano'
@@ -12,7 +11,7 @@ import ScannedRocks from '../scene/ScannedRocks'
 import FillLight from '../scene/FillLight'
 import './scanMaterial'
 import PlayEffects from '../scene/PlayEffects'
-import { Adaptive, FrameLimiter } from '../scene/Perf'
+import { Adaptive, FrameLimiter, Stats, Warmup, statsOn } from '../scene/Perf'
 import { SUN_DIR, shared } from '../scene/world'
 import EffectsGPU from './EffectsGPU'
 import { FieldFlowersGPU, PetalsGPU } from './FlowersGPU'
@@ -21,7 +20,7 @@ import GroundGPU from './GroundGPU'
 import RocksGPU from './RocksGPU'
 import { RuinsGPU } from './RuinsGPU'
 import { BeachShadowGPU, PianoShadowGPU } from './shadow'
-import SeaGPU, { REFLECTION_HIDDEN, seaSwap } from './SeaGPU'
+import SeaGPU, { NEVER_REFLECTED, REFLECTION_HIDDEN, seaSwap } from './SeaGPU'
 import SkyGPU from './SkyGPU'
 import { sync } from './tsl'
 
@@ -30,14 +29,12 @@ import { sync } from './tsl'
 // built up here piece by piece until it matches the WebGL scene, then becomes the default.
 extend(THREE)
 
-function Clock({ onReady }) {
-  const frames = useRef(0)
+function Clock() {
   useFrame(({ clock }) => {
     const t = clock.elapsedTime
     shared.uTime.value = t
     shared.uGlowPulse.value = 1 + 0.3 * Math.sin((t * Math.PI * 2) / 8)
     sync()
-    if (++frames.current === 3) texturesReady().then(onReady)
   })
   return null
 }
@@ -117,20 +114,24 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       className="scene"
       frameloop={debug.fps === 0 ? 'always' : 'demand'}
       dpr={q.dpr}
-      shadows={q.rockShadows > 0}
+      shadows={rockShadowSize > 0}
       camera={{ fov: 42, near: 0.1, far: 3000, position: [0, 1, 9] }}
       gl={gl}
-      onCreated={({ gl, camera, scene }) => {
+      onCreated={({ gl, camera, scene, raycaster }) => {
         gl.toneMapping = THREE.NeutralToneMapping
         // Haze for the standard materials (scanned rocks, piano), matching the custom shaders' fog.
         scene.fog = new THREE.FogExp2(shared.uFogColor.value, shared.uFogDensity.value)
         camera.layers.enable(REFLECTION_HIDDEN) // grass and flowers: seen, but not reflected
+        camera.layers.enable(NEVER_REFLECTED) // the field: seen, never reflected
+        raycaster.layers.enable(NEVER_REFLECTED) // (the piano keys are on it)
       }}
       onPointerMissed={() => onSelect(null)}
     >
-      {debug.fps > 0 && <FrameLimiter fps={debug.fps} />}
-      {autoQualityEnabled && debug.fps > 0 && <Adaptive tier={tier} onTier={setTier} startTier={startTier} baseDpr={q.dpr[1]} />}
-      <Clock onReady={onReady} />
+      {debug.fps !== 0 && <FrameLimiter fps={debug.fps} />}
+      {autoQualityEnabled && debug.fps !== 0 && <Adaptive tier={tier} onTier={setTier} startTier={startTier} baseDpr={q.dpr[1]} />}
+      <Clock />
+      <Warmup onDone={onReady} />
+      {statsOn && <Stats />}
       <CameraRig />
       <CursorField />
       {debug.shadow && <PianoShadowGPU />}
@@ -139,7 +140,7 @@ export default function ExperienceGPU({ hovered, selected, onHover, onSelect, on
       {/* Ground colour: light bounced up from the lavender field onto the piano. */}
       <hemisphereLight args={['#8f86c8', '#2c2a6c', 0.8]} />
       <directionalLight position={SUN_DIR.clone().multiplyScalar(100)} color="#f5c8d0" intensity={2.2} />
-      <FillLight shadowSize={q.rockShadows} />
+      <FillLight shadowSize={rockShadowSize} />
       <pointLight position={[-1.45, 0.35, 4.3]} color="#6f9bff" intensity={1.4} distance={4} decay={2} />
 
       <SkyGPU />

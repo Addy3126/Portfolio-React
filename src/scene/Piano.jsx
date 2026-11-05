@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
-import { BLACK_MIDI, WHITE_MIDI, keys, noteOff, noteOn, piano } from '../piano/engine'
+import { BLACK_MIDI, WHITE_MIDI, keys, noteOff, noteOn, piano, subscribe } from '../piano/engine'
 import { SHADOW_LAYER } from './PianoShadow'
 import Bench from './piano/Bench'
 import { design } from './piano/designs'
@@ -23,7 +23,7 @@ import {
   outline,
 } from './piano/geometry'
 import { debug } from '../quality'
-import { PIANO_CENTRE, PIANO_POS, palette, shared } from './world'
+import { NEVER_REFLECTED, PIANO_CENTRE, PIANO_POS, palette, shared } from './world'
 
 const LID_ANGLE = 0.58
 const FLAP_X = 0.37 // where the front lid flap hinges
@@ -631,6 +631,10 @@ export default function Piano({ captureEnv }) {
   })
 
   const playable = usePlayableKeys(parts)
+  // Key handlers only while seated: any handler makes three raycast the 88 keys on every
+  // pointer move over the page.
+  const [seated, setSeated] = useState(false)
+  useEffect(() => subscribe((e) => e.type === 'play' && setSeated(e.on)), [])
 
   const group = useRef()
 
@@ -655,15 +659,19 @@ export default function Piano({ captureEnv }) {
   })
   useEffect(() => () => capture.current.env?.dispose(), [])
 
-  // Everything in the piano also renders into the shadow map.
+  // Everything in the piano also renders into the shadow map. It never shows in the sea's
+  // reflection (it stands behind the shore), so it's left out of that pass.
   useEffect(() => {
-    group.current.traverse((o) => o.layers.enable(SHADOW_LAYER))
+    group.current.traverse((o) => {
+      o.layers.set(NEVER_REFLECTED)
+      o.layers.enable(SHADOW_LAYER)
+    })
   }, [])
 
   return (
     <group ref={group} position={PIANO_POS}>
       {parts.map((p, i) =>
-        p.userData.keys ? <primitive key={i} object={p} {...playable.handlers(p.userData.keys.kind)} /> : <primitive key={i} object={p} />,
+        p.userData.keys && seated ? <primitive key={i} object={p} {...playable.handlers(p.userData.keys.kind)} /> : <primitive key={i} object={p} />,
       )}
       <Bench design={design} lacquer={mats.lacquer} brass={mats.brass} glow={mats.glow} />
       <primitive object={playable.glowMesh} />

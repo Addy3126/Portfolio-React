@@ -264,8 +264,13 @@ export const viewNormal = (Nw) => normalize(cameraViewMatrix.mul(v4(Nw, 0.0)).xy
 
 // Rings of light spreading from the piano when it is played (as rippleGLSL).
 export const pianoRipple = Fn(([d]) => {
-  const age = max(vec4(u.time).sub(u.rippleT), vec4(0.0))
-  const off = vec4(d).sub(age.mul(3.2))
-  const band = exp(off.mul(off).div(-0.18)).mul(exp(age.mul(-0.85))).mul(u.rippleA)
-  return band.x.add(band.y).add(band.z).add(band.w)
+  const out = float(0).toVar()
+  // Nothing playing: skip (a uniform branch, so the field pays nothing for it).
+  If(u.rippleA.x.add(u.rippleA.y).add(u.rippleA.z).add(u.rippleA.w).greaterThan(0.0), () => {
+    const age = max(vec4(u.time).sub(u.rippleT), vec4(0.0))
+    const off = vec4(d).sub(age.mul(3.2))
+    const band = exp(off.mul(off).div(-0.18)).mul(exp(age.mul(-0.85))).mul(u.rippleA)
+    out.assign(band.x.add(band.y).add(band.z).add(band.w))
+  })
+  return out
 })
