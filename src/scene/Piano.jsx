@@ -5,6 +5,7 @@ import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeom
 import { BLACK_MIDI, WHITE_MIDI, keys, noteOff, noteOn, piano, subscribe } from '../piano/engine'
 import { SHADOW_LAYER } from './PianoShadow'
 import Bench from './piano/Bench'
+import { mergeStatic } from './mergeStatic'
 import { design } from './piano/designs'
 import { noiseBump, spruceTextures } from './piano/textures'
 import {
@@ -615,6 +616,9 @@ export default function Piano({ captureEnv }) {
     for (const p of list) p.traverse((o) => o.geometry && (fixed += fixNormals(o.geometry)))
     if (fixed && import.meta.env.DEV) console.info('piano: repaired', fixed, 'normals')
     window.__pianoNormalsFixed = fixed
+    // Static parts merged per material (dozens of small draws became a few); the keys and
+    // the sustain pedal move, so they stay as they are.
+    list.push(...mergeStatic(list, (o) => o.userData.keys || o.userData.sustainPedal))
     return list
   }, [mats])
 

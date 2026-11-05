@@ -6,16 +6,17 @@ import { reducedMotion, tier } from '../quality'
 // every frame, so the sky keeps a short chain of baked cube maps: the one on screen, the one
 // it is fading into, and the next one, baked a strip at a time in the background with the
 // cloud field moved a little further downwind. The sky shader cross-fades between the two
-// shown ones. Each re-bake is spread over ~200 frames (one strip of one face every few
-// frames), so the cost per frame stays tiny.
+// shown ones. Each re-bake is spread over a few hundred frames, one 16-pixel strip of one
+// face every frame: the same small cost in each (a bigger strip every few frames made those
+// frames run long, an uneven rhythm that read as stutter).
 export const DRIFT = !reducedMotion && tier !== 'low' && tier !== 'minimal'
 export const DRIFT_SIZE = tier === 'mid' ? 512 : 768
 // ?drift=fast: whole faces every frame and a short fade (for checking it works).
 const fast = new URLSearchParams(window.location.search).get('drift') === 'fast'
 const PERIOD = fast ? 6 : 20 // seconds per cross-fade
 const WIND = [0.13, 0, -0.17] // cloud-field shift per period, in sky units
-const STRIPS = fast ? 1 : 8 // per cube face
-const EVERY = fast ? 1 : 4 // frames between strips
+const STRIPS = fast ? 1 : DRIFT_SIZE / 16 // per cube face: 16-pixel rows
+const EVERY = 1 // frames between strips
 
 // renderer: the three renderer; cubeCamera: a CubeCamera (its six children are used);
 // bakeScene: scene holding the bake sphere; setShift(x, y, z): moves the cloud field for

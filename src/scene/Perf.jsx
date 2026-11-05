@@ -1,49 +1,176 @@
+import './threeLog'
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { TIER_ORDER } from '../quality'
+import { calibrate, debug, saveCalibration, settingsFor } from '../quality'
+import { decide } from './calibration'
 import { motion } from '../store'
 import { texturesReady } from '../textureReady'
 
-// Warm-up tour, behind the loading screen: once the textures are in, render a frame from
-// each section's camera and from mid-flight (the camera rig runs first in a frame, so the
-// level-of-detail choices that follow see the new position), so every shader is compiled and
-// every texture is on the GPU before the page shows. Otherwise each was prepared the first
-// time it came into view, and every section stalled on its first visit.
-export const warm = { done: false }
+// Live numbers for the ?hud=1 readout (and tests): frame interval, main-thread time per
+// frame, GPU time per frame (WebGPU timestamp queries, where the browser offers them).
+export const perf = { intervals: [], cpu: [], gpu: [], sink: null }
+const keep = (arr, v, n = 120) => {
+  arr.push(v)
+  if (arr.length > n) arr.shift()
+}
+const median = (arr) => {
+  if (!arr.length) return null
+  const a = [...arr].sort((x, y) => x - y)
+  return a[Math.floor(a.length / 2)]
+}
+
+// Startup, behind the loading screen, in three steps:
+// 1. Warm-up tour: once the textures are in, render a frame from each section's camera and
+//    from mid-flight, so every shader is compiled and every texture is on the GPU before the
+//    page shows (otherwise each section stalled on its first visit).
+// 2. Calibration (first visit on this GPU and screen): render each section for a few
+//    frames and measure the GPU time per frame (timestamp queries; without them, whether
+//    frames keep up with the display). If the heaviest section doesn't fit the frame budget,
+//    lower the render resolution, then the tier (and warm up again), and measure again; if
+//    there's lots of room, try one tier up.
+// 3. Settle: the result is fixed for the visit (nothing switches while browsing) and
+//    remembered for the next one.
 const TOUR = [1, 2, 3, 2.5, 1.5, 0.5, 0]
-export function Warmup({ onDone }) {
-  const st = useRef({ step: -1, saved: 0, mounted: 0, live: true })
+const MEASURE = [0, 1, 2, 3]
+const SETTLE = 3 // frames after moving before measuring (level of detail, uploads)
+const SAMPLES = 8
+const MAX_TIME = 20000 // ms: make no further changes after this
+const HARD_STOP = 30000 // ms: stop measuring, keep what we have
+const minScale = (tierName) => (Math.max(1, Math.min(window.devicePixelRatio, settingsFor(tierName).dpr[1])) > 1.2 ? 0.7 : 0.85)
+
+export function Startup({ tier, scale, onQuality, onDone }) {
+  const gl = useThree((s) => s.gl)
+  const st = useRef(null)
+  if (!st.current) st.current = { phase: 'wait', mounted: 0, live: true, i: 0, f: 0, m: 0, last: 0, tier, scale, saved: 0, t0: 0, rows: [], probed: null, failed: new Set(), log: [] }
+
   useEffect(() => {
-    warm.done = false // (again, if the WebGL scene takes over from a failed WebGPU one)
     const s = st.current
     s.live = true
     return () => {
       s.live = false
+      perf.sink = null
     }
   }, [])
+
   useFrame(() => {
     const s = st.current
-    // Wait a few frames so everything has mounted and queued its downloads, then for those.
-    // (Two frames' grace after that, for what mounts once its download is in.)
-    if (++s.mounted === 3) texturesReady().then(() => s.live && (s.step = -3))
-    if (s.step === -1 || warm.done) return
-    if (s.step < -1) {
-      s.step = s.step === -2 ? 0 : s.step + 1
-      return
-    }
-    if (s.step === 0) s.saved = motion.progress
-    if (s.step >= TOUR.length) {
+    const now = performance.now()
+    // Wait a few frames so everything has mounted and queued its downloads, then for those,
+    // then two frames' grace for what mounts once its download is in.
+    if (++s.mounted === 3) texturesReady().then(() => s.live && s.phase === 'wait' && Object.assign(s, { phase: 'grace', i: 2 }))
+    if (s.phase === 'wait' || s.phase === 'done') return
+
+    const begin = (phase) => Object.assign(s, { phase, i: 0, f: 0, m: 0, rows: [], last: 0 })
+    const finish = () => {
       motion.progress = s.saved
-      warm.done = true
+      if (calibrate) saveCalibration(s.tier, s.scale)
+      if (gl.backend && !debug.hud) gl.backend.trackTimestamp = false // no query cost while browsing
+      perf.sink = null
+      s.phase = 'done'
+      window.__calibration = { tier: s.tier, scale: s.scale, ms: Math.round(now - s.t0), steps: s.log }
       onDone()
-      return
     }
-    motion.progress = TOUR[s.step++] // the camera rig places the camera from this
+    const change = (tierName, sc) => {
+      const recompile = tierName !== s.tier
+      s.tier = tierName
+      s.scale = sc
+      onQuality(tierName, sc)
+      begin(recompile ? 'warm' : 'measure')
+    }
+
+    if (s.phase === 'grace') {
+      if (--s.i > 0) return
+      s.saved = motion.progress
+      s.t0 = now
+      begin('warm')
+    }
+
+    if (s.phase === 'warm') {
+      if (s.i < TOUR.length) {
+        motion.progress = TOUR[s.i++] // the camera rig (next in the frame) places the camera
+        return
+      }
+      if (s.revert) return finish() // back on the last tier that fitted, now warmed up
+      if (!calibrate) return finish()
+      begin('measure')
+    }
+
+    // phase 'measure'
+    if (now - s.t0 > HARD_STOP) {
+      // Frames this slow mean the tier is far too heavy: settle on the lightest (warmed up
+      // first), unless already there.
+      s.log.push('out of time')
+      if (s.tier === 'minimal' || s.revert) return finish()
+      s.revert = true
+      return change('minimal', 1)
+    }
+    motion.progress = MEASURE[s.m]
+    const dt = s.last ? now - s.last : 0
+    s.last = now
+    if (s.f === SETTLE) {
+      s.intervals = []
+      s.gpu = []
+      perf.sink = s.gpu
+    }
+    if (s.f > SETTLE) s.intervals.push(dt)
+    if (++s.f < SETTLE + SAMPLES + 1) return
+    s.rows.push({ interval: median(s.intervals), gpu: median(s.gpu) })
+    s.f = 0
+    s.last = 0
+    if (++s.m < MEASURE.length) return
+
+    // Decide (scene/calibration.js) and act.
+    const d = decide({ rows: s.rows, budget: 1000 / pace.fps, tier: s.tier, scale: s.scale, probed: s.probed, late: now - s.t0 > MAX_TIME, minScale: minScale(s.tier) })
+    s.log.push(d.note)
+    if (d.action === 'probe') s.probed = { tier: s.tier, scale: s.scale }
+    if (d.action === 'revert') s.revert = true
+    if (d.action === 'finish') return finish()
+    change(d.tier, d.scale)
   }, -10)
   return null
 }
 
-// The frame rate the scene renders at (read by Adaptive).
+// Per-frame numbers: main-thread time (first to last frame callback, which includes the
+// render calls), the interval between frames, and GPU time from timestamp queries. Also the
+// render counts for ?stats=1 (window.__stats).
+export function Probe() {
+  const st = useRef({ start: 0, last: 0, since: 0, pending: false })
+  useFrame(({ gl }) => {
+    const s = st.current
+    s.start = performance.now()
+    if (s.last) keep(perf.intervals, s.start - s.last)
+    s.last = s.start
+    gl.info.autoReset = false
+    gl.info.reset()
+  }, -1000)
+  useFrame(({ gl }) => {
+    const s = st.current
+    keep(perf.cpu, performance.now() - s.start)
+    const r = gl.info.render
+    window.__gl = gl
+    window.__stats = { triangles: r.triangles, calls: r.drawCalls ?? r.calls, programs: gl.info.programs?.length ?? null }
+    window.__perf = perf
+    // GPU time: resolve the queries of the frames since the last resolve, per frame.
+    s.since++
+    if (gl.backend?.trackTimestamp && !s.pending) {
+      const n = s.since
+      s.since = 0
+      s.pending = true
+      gl.resolveTimestampsAsync('render')
+        .then((d) => {
+          if (d > 0 && n > 0) {
+            keep(perf.gpu, d / n)
+            perf.sink?.push(d / n)
+          }
+        })
+        .catch(() => {})
+        .finally(() => (s.pending = false))
+    }
+  }, 1000)
+  return null
+}
+
+// The frame rate the scene renders at (the calibration's frame budget).
 export const pace = { fps: 60 }
 // Highest rate the scene renders at automatically.
 const MAX_FPS = 75
@@ -106,93 +233,3 @@ export function FrameLimiter({ fps }) {
   return null
 }
 
-// Adaptive quality. Watches the real interval between rendered frames (the scene renders at
-// pace.fps, so anything slower means the GPU can't keep up) over two-second windows:
-// - late frames: lower the render resolution in steps (to 85% or 70%), then drop a tier;
-// - on time for a while: raise the resolution back, then try the next tier up (at most one
-//   above the starting guess). A tier that proves too slow is never tried again, so it
-//   settles instead of oscillating.
-const STEP = 0.15
-// On standard-DPI screens a lower render resolution shows as blur, so there it only drops to
-// 85% before the tier goes down; high-DPI screens can go to 70% unnoticed.
-const minScale = (baseDpr) => (Math.min(window.devicePixelRatio, baseDpr) > 1.2 ? 0.7 : 0.85)
-export function Adaptive({ tier, onTier, startTier, baseDpr }) {
-  const setDpr = useThree((s) => s.setDpr)
-  const s = useRef(null)
-  if (!s.current) s.current = { last: 0, start: performance.now(), sum: 0, n: 0, windowStart: 0, settleUntil: 0, goodSince: 0, scale: 1, failed: new Set(), probe: null }
-  const idx = TIER_ORDER.indexOf(tier)
-  const maxIdx = Math.min(TIER_ORDER.length - 1, TIER_ORDER.indexOf(startTier) + 1)
-
-  useFrame(() => {
-    const st = s.current
-    const now = performance.now()
-    const dt = now - st.last
-    st.last = now
-    if (!warm.done) {
-      st.start = now // count from the end of the warm-up (its frames compile shaders)
-      return
-    }
-    // Ignore shader warm-up, tab switches and the settle time after a change.
-    // (Slow frames still count: only a hidden tab or a stall over 1.5 s is skipped.)
-    if (now - st.start < 4000 || now < st.settleUntil || document.hidden || dt > 1500) return
-    if (!st.windowStart) st.windowStart = now
-    st.sum += dt
-    st.n++
-    if (now - st.windowStart < 2000) return
-    const avg = st.sum / st.n
-    st.sum = 0
-    st.n = 0
-    st.windowStart = 0
-    window.__adaptive = { tier, scale: st.scale, avg: Math.round(avg * 10) / 10 }
-    const apply = (scale) => {
-      st.scale = scale
-      setDpr(Math.min(window.devicePixelRatio, baseDpr) * scale)
-    }
-
-    const BUDGET = 1000 / pace.fps
-    if (avg > BUDGET * 1.3) {
-      st.goodSince = 0
-      st.settleUntil = now + 2500
-      if (st.probe !== null) {
-        // The tier we just tried is too much for this machine: go back and remember.
-        st.failed.add(st.probe)
-        st.probe = null
-        onTier(TIER_ORDER[idx - 1])
-      } else if (st.scale > minScale(baseDpr) + 1e-3) apply(Math.max(minScale(baseDpr), st.scale - STEP))
-      else if (idx > 0) {
-        apply(1)
-        onTier(TIER_ORDER[idx - 1])
-      }
-      return
-    }
-    if (avg < BUDGET * 1.08) {
-      if (!st.goodSince) st.goodSince = now
-      if (st.probe !== null && now - st.goodSince > 6000) st.probe = null // the new tier holds
-      if (now - st.goodSince < 8000) return
-      st.goodSince = now
-      if (st.scale < 1 - 1e-3) apply(Math.min(1, st.scale + STEP))
-      else if (idx < maxIdx && !st.failed.has(idx + 1)) {
-        st.probe = idx + 1
-        st.settleUntil = now + 2500
-        onTier(TIER_ORDER[idx + 1])
-      }
-    } else st.goodSince = 0
-  })
-  return null
-}
-
-// Debug: ?stats=1 exposes per-frame render counts as window.__stats (both renderers).
-export const statsOn = new URLSearchParams(window.location.search).get('stats') === '1'
-export function Stats() {
-  // Count the whole frame (all passes), not just the last render call.
-  useFrame(({ gl }) => {
-    gl.info.autoReset = false
-    gl.info.reset()
-  }, -1000)
-  useFrame(({ gl }) => {
-    window.__gl = gl
-    const r = gl.info.render
-    window.__stats = { triangles: r.triangles, calls: r.drawCalls ?? r.calls, programs: gl.info.programs?.length ?? null }
-  }, 1000)
-  return null
-}

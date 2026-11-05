@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
 import {
@@ -21,11 +21,12 @@ import {
   sign,
   sin,
   smoothstep,
+  step,
   varying,
   vec2,
   vec3,
 } from 'three/tsl'
-import { FIELD, FOLD_BELOW, TILE, bladeTemplate, buildTile, seeded } from '../scene/Grass'
+import { FOLD_BELOW, bladeTemplate, buildField, updateField } from '../scene/Grass'
 import { color, palette, shared } from '../scene/world'
 import { NEVER_REFLECTED, REFLECTION_HIDDEN } from './SeaGPU'
 import { pianoShadow } from './shadow'
@@ -67,6 +68,9 @@ function makeMaterial(hi, fadeFar = true) {
   // extra folded blade of the close level fades out before tiles switch to the far level.
   const camD = length(iOffset.xz.sub(cameraPosition.xz))
   let shrink = fadeFar ? float(1.0).sub(smoothstep(u.grassFar.sub(8.0), u.grassFar.sub(2.0), camD)) : float(1.0)
+  // Level of detail per blade (as scene/Grass.jsx): the close level draws blades nearer than
+  // grassHi, the far level the rest, so the far level can be drawn in large chunks.
+  shrink = shrink.mul(hi ? float(1.0).sub(step(u.grassHi, camD)) : step(u.grassHi, camD))
   let yaw = iParams.x
   let hgt = iParams.y
   let base = iOffset
@@ -209,64 +213,47 @@ export default function GrassGPU({ density = 140, hiDist = 10, loDist = 28 }) {
   const materials = useMemo(() => ({ hi: makeMaterial(true), lo: makeMaterial(false), loSpit: makeMaterial(false, false) }), [])
   const templates = useMemo(() => ({ hi: bladeTemplate(4, 2), lo: bladeTemplate(3, 1) }), [])
 
-  const tiles = useMemo(() => {
-    const rand = seeded(1234)
-    const list = []
-    for (let tx = Math.floor(FIELD.x0 / TILE); tx < Math.ceil(FIELD.x1 / TILE); tx++)
-      for (let tz = Math.floor(FIELD.z0 / TILE); tz < Math.ceil(FIELD.z1 / TILE); tz++) {
-        const tile = buildTile(tx, tz, density, rand)
-        if (!tile) continue
-        const sphere = new THREE.Sphere(tile.center, TILE * 0.75 + 1.2)
-        const spit = tile.center.z < -12
-        const make = (tpl, mat) => {
-          const g = new THREE.InstancedBufferGeometry()
-          g.setAttribute('position', tpl.position)
-          g.setIndex(tpl.index)
-          for (const [k, a] of Object.entries(tile.attrs)) g.setAttribute(k, a)
-          g.instanceCount = tile.count
-          g.boundingSphere = sphere
-          const m = new THREE.Mesh(g, mat)
-          m.visible = false
-          m.layers.set(spit ? REFLECTION_HIDDEN : NEVER_REFLECTED)
-          return m
-        }
-        window.__grassBlades = (window.__grassBlades || 0) + tile.count
-        list.push({ center: tile.center, spit, hi: make(templates.hi, materials.hi), lo: make(templates.lo, spit ? materials.loSpit : materials.lo) })
-      }
-    return list
+  // Close-level tiles and far-level chunks of the same blades (see buildField).
+  const field = useMemo(() => {
+    const f = buildField(density)
+    const make = (part, tpl, mat) => {
+      const g = new THREE.InstancedBufferGeometry()
+      g.setAttribute('position', tpl.position)
+      g.setIndex(tpl.index)
+      for (const [k, a] of Object.entries(part.attrs)) g.setAttribute(k, a)
+      g.instanceCount = part.count
+      g.boundingSphere = part.sphere
+      const m = new THREE.Mesh(g, mat)
+      m.visible = false
+      // Only the spit's grass can show in the sea's reflection.
+      m.layers.set(part.spit ? REFLECTION_HIDDEN : NEVER_REFLECTED)
+      return m
+    }
+    for (const t of f.tiles) t.hi = make(t, templates.hi, materials.hi)
+    for (const c of f.chunks) c.lo = make(c, templates.lo, c.spit ? materials.loSpit : materials.lo)
+    return f
   }, [density, templates, materials])
 
   useEffect(
-    () => () =>
-      tiles.forEach((t) => {
-        t.hi.geometry.dispose()
-        t.lo.geometry.dispose()
-      }),
-    [tiles],
+    () => () => [...field.tiles.map((t) => t.hi), ...field.chunks.map((c) => c.lo)].forEach((m) => m.geometry.dispose()),
+    [field],
   )
 
   // Let the ground paint a grass carpet where blades stop.
   useEffect(() => {
     shared.uGrassFar.value = loDist
     shared.uGrassHi.value = hiDist
-  }, [loDist])
+  }, [loDist, hiDist])
 
-  useFrame(({ camera }) => {
-    for (const t of tiles) {
-      const d = Math.hypot(t.center.x - camera.position.x, t.center.z - camera.position.z)
-      t.hi.visible = d < hiDist
-      t.lo.visible = d >= hiDist && (d < loDist || t.spit)
-    }
-  })
+  useFrame(({ camera }) => updateField(field, camera.position, hiDist, loDist))
 
-  const group = useRef()
   return (
-    <group ref={group}>
-      {tiles.map((t, i) => (
-        <group key={i}>
-          <primitive object={t.hi} />
-          <primitive object={t.lo} />
-        </group>
+    <group>
+      {field.tiles.map((t, i) => (
+        <primitive key={`t${i}`} object={t.hi} />
+      ))}
+      {field.chunks.map((c, i) => (
+        <primitive key={`c${i}`} object={c.lo} />
       ))}
     </group>
   )
