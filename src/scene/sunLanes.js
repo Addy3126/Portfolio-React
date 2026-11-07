@@ -32,3 +32,21 @@ float laneShadow(vec2 p){
   return s;
 }
 `
+
+// Foam where the towers stand in the sea (new look): each footprint's half extents, and how
+// much foam there is at (x, z): a band hugging the walls, out to about a metre.
+export const FOOTPRINTS = TOWERS.map((t) => [t.x, t.z, t.w * 0.5, t.d * 0.5])
+export const FOAM_REACH = 1.6
+export const towerFoamGLSL = /* glsl */ `
+const vec4 FOOT[${FOOTPRINTS.length}] = vec4[${FOOTPRINTS.length}](
+  ${FOOTPRINTS.map((f) => `vec4(${f.map((v) => v.toFixed(2)).join(', ')})`).join(',\n  ')}
+);
+float towerFoam(vec2 p){
+  float f = 0.0;
+  for (int i = 0; i < ${FOOTPRINTS.length}; i++) {
+    vec2 q = abs(p - FOOT[i].xy) - FOOT[i].zw;
+    f = max(f, 1.0 - smoothstep(${(FOAM_REACH * 0.2).toFixed(2)}, ${FOAM_REACH.toFixed(2)}, length(max(q, 0.0))));
+  }
+  return f;
+}
+`

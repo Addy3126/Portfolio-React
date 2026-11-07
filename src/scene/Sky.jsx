@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { tier } from '../quality'
+import { lookNew, tier } from '../quality'
 import { DRIFT, useCloudDrift } from './cloudDrift'
 import { noise3GLSL, noiseGLSL } from './glsl'
 import { color, palette, shared } from './world'
@@ -153,6 +153,10 @@ void main(){
   float disc = smoothstep(0.99955, 0.99975, sd) * smoothstep(-0.004, 0.003, h);
   col += vec3(7.0, 6.4, 6.2) * disc * mix(0.15, 1.0, clear);
   col += vec3(1.6, 1.3, 1.35) * pow(sd, 500.0) * mix(0.4, 1.0, clear);
+#ifdef LOOK_NEW
+  // Warm atmospheric glow round the low sun: a tight corona and a wide soft halo.
+  col += vec3(1.0, 0.8, 0.74) * (pow(sd, 2500.0) * 1.1 + pow(sd, 90.0) * 0.16) * mix(0.35, 1.0, clear) * smoothstep(-0.03, 0.01, h);
+#endif
   // Salt-spray haze just above the horizon, so sea and sky meet softly.
   float haze = exp(-max(h, 0.0) * 38.0) * smoothstep(-0.02, 0.0, h);
   col = mix(col, mix(uFogColor, uFogGlow, pow(sd, 6.0) * 0.8) * 1.06, haze * 0.42);
@@ -188,6 +192,7 @@ export default function Sky() {
       fragmentShader: liveFragment,
       side: THREE.BackSide,
       depthWrite: false,
+      defines: lookNew ? { LOOK_NEW: '' } : {},
       uniforms: { uSky: { value: target.texture }, uSkyB: { value: target.texture }, uBlend: { value: 0 }, uTime: shared.uTime, uSunDir: shared.uSunDir, uFogColor: shared.uFogColor, uFogGlow: shared.uFogGlow },
     })
     return { target, material }

@@ -28,6 +28,7 @@ import {
 } from 'three/tsl'
 import { FOLD_BELOW, bladeTemplate, buildField, updateField } from '../scene/Grass'
 import { color, palette, shared } from '../scene/world'
+import { lookNew } from '../quality'
 import { NEVER_REFLECTED, REFLECTION_HIDDEN } from './SeaGPU'
 import { pianoShadow } from './shadow'
 import { applyFog, spow, u, viewNormal, vnoise, pianoRipple } from './tsl'
@@ -177,27 +178,50 @@ function makeMaterial(hi, fadeFar = true) {
     const H = normalize(L.sub(V))
     const spec = spow(dot(N, H), 12.0).mul(tt).mul(sh)
 
-    const col = albedo
-      .mul(ambient.add(cSun.mul(wrap).mul(0.45)))
-      .add(albedo.mul(cSun).mul(through).mul(1.4))
-      .add(cSun.mul(spec).mul(0.08))
-      .toVar()
+    let col
+    if (lookNew) {
+      // Dusk with the sun ahead (as scene/Grass.jsx): the field mostly in its own shade, the
+      // light coming through the blades and catching their edges toward the sun.
+      const amb = ambient.mul(0.64)
+      const rim = spow(float(1.0).sub(abs(dot(N, V))), 2.5).mul(spow(dot(V, L).mul(0.5).add(0.5), 3.0)).mul(tt.mul(0.7).add(0.3))
+      col = albedo
+        .mul(amb.add(cSun.mul(wrap).mul(0.36)))
+        .add(albedo.mul(cSun).mul(through).mul(2.2))
+        .add(cSun.mul(spec.mul(0.06).add(rim.mul(sh).mul(0.85))))
+        .toVar()
+      const frost = smoothstep(0.35, 0.95, tt)
+        .mul(float(0.55).add(smoothstep(0.35, 0.7, vPatch.x).mul(0.45)))
+        .mul(float(1.0).sub(vKind.mul(0.6)))
+      const frostLit = cFrost.mul(float(0.32).add(amb.mul(0.55)).add(cSun.mul(wrap.mul(0.25).add(through.mul(1.8)).add(rim.mul(0.6)))))
+      col.assign(mix(col, frostLit, frost.mul(0.32)))
+      col.mulAssign(mix(0.58, 1.0, sh))
+      col.mulAssign(mix(0.18, 1.0, smoothstep(0.0, 0.6, tt)))
+      const calm = smoothstep(5.0, 16.0, dist)
+      const avg = mix(cTip, cFrost, 0.4).mul(cSky.mul(0.72).add(cSun.mul(0.2)))
+      col.assign(mix(col, avg, calm.mul(0.45)))
+    } else {
+      col = albedo
+        .mul(ambient.add(cSun.mul(wrap).mul(0.45)))
+        .add(albedo.mul(cSun).mul(through).mul(1.4))
+        .add(cSun.mul(spec).mul(0.08))
+        .toVar()
 
-    // Frost on the upper blade, heavier in frosty patches.
-    const frost = smoothstep(0.3, 0.95, tt)
-      .mul(float(0.55).add(smoothstep(0.35, 0.7, vPatch.x).mul(0.45)))
-      .mul(float(1.0).sub(vKind.mul(0.6)))
-    const frostLit = cFrost.mul(float(0.5).add(ambient.mul(0.7)).add(cSun.mul(wrap.mul(0.3).add(through.mul(1.4)))))
-    col.assign(mix(col, frostLit, frost.mul(0.8)))
-    col.mulAssign(mix(0.62, 1.0, sh))
+      // Frost on the upper blade, heavier in frosty patches.
+      const frost = smoothstep(0.3, 0.95, tt)
+        .mul(float(0.55).add(smoothstep(0.35, 0.7, vPatch.x).mul(0.45)))
+        .mul(float(1.0).sub(vKind.mul(0.6)))
+      const frostLit = cFrost.mul(float(0.5).add(ambient.mul(0.7)).add(cSun.mul(wrap.mul(0.3).add(through.mul(1.4)))))
+      col.assign(mix(col, frostLit, frost.mul(0.8)))
+      col.mulAssign(mix(0.62, 1.0, sh))
 
-    // Ambient occlusion: dark at the roots.
-    col.mulAssign(mix(0.22, 1.0, smoothstep(0.0, 0.55, tt)))
+      // Ambient occlusion: dark at the roots.
+      col.mulAssign(mix(0.22, 1.0, smoothstep(0.0, 0.55, tt)))
 
-    // Far away, pull blades toward the field's average tone to stop shimmer.
-    const calm = smoothstep(5.0, 16.0, dist)
-    const avg = mix(cTip, cFrost, 0.55).mul(cSky.mul(0.9).add(cSun.mul(0.15)))
-    col.assign(mix(col, avg, calm.mul(0.45)))
+      // Far away, pull blades toward the field's average tone to stop shimmer.
+      const calm = smoothstep(5.0, 16.0, dist)
+      const avg = mix(cTip, cFrost, 0.55).mul(cSky.mul(0.9).add(cSun.mul(0.15)))
+      col.assign(mix(col, avg, calm.mul(0.45)))
+    }
 
     // Blue spill from the piano.
     const pd = length(W.xz.sub(u.pianoPos.xz))

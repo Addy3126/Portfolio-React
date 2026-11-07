@@ -45,6 +45,9 @@ export const u = {
   cursorStrength: uniform(0),
   rippleT: uniform(shared.uRippleT.value),
   rippleA: uniform(shared.uRippleA.value),
+  gradeHigh: uniform(shared.uGradeHigh.value),
+  gradeShadow: uniform(shared.uGradeShadow.value),
+  gradeCurve: uniform(0.22),
 }
 export function sync() {
   u.time.value = shared.uTime.value
@@ -53,6 +56,7 @@ export function sync() {
   u.grassFar.value = shared.uGrassFar.value
   u.grassHi.value = shared.uGrassHi.value
   u.cursorStrength.value = shared.uCursorStrength.value
+  u.gradeCurve.value = shared.uGradeCurve.value
 }
 
 export const spow = Fn(([x, e]) => pow(max(x, 0.0), e))

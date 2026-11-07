@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { about, contact, projects, site } from '../content'
 import { SECTIONS, motion } from '../store'
 import useLocalTime from './useLocalTime'
+import { ambient, setAmbient } from '../audio/ambient'
+import { lookNew } from '../quality'
 
 // Each panel fades in around its camera stop.
 function usePanelFades(refs, cue) {
@@ -27,6 +29,24 @@ function usePanelFades(refs, cue) {
     tick()
     return () => cancelAnimationFrame(raf)
   }, [refs, cue])
+}
+
+// Ambient wind and waves (audio/ambient.js), off until turned on here.
+function SoundToggle() {
+  const [on, setOn] = useState(ambient.on)
+  useEffect(() => {
+    ambient.listeners.add(setOn)
+    return () => ambient.listeners.delete(setOn)
+  }, [])
+  return (
+    <button className="sound" aria-pressed={on} aria-label="Ambient sound" onClick={(e) => (setAmbient(!on), e.currentTarget.blur())} title="Ambient sound: wind and waves">
+      <span aria-hidden="true">{on ? '◉' : '○'}</span>
+      <span className="label" aria-hidden="true">
+        {' '}
+        Sound
+      </span>
+    </button>
+  )
 }
 
 function smoothstep(a, b, x) {
@@ -69,6 +89,7 @@ export default function Overlay({ goTo, hovered, selected, onHover, onSelect, re
               {s[0].toUpperCase() + s.slice(1)}
             </button>
           ))}
+          {lookNew && <SoundToggle />}
         </nav>
         <dl className="status">
           <div>

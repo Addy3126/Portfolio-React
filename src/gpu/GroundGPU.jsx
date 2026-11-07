@@ -5,6 +5,7 @@ import { cullHidden } from '../scene/visibility'
 import { color, landDist as landDistJS, palette } from '../scene/world'
 import { beachShadow, pianoShadow } from './shadow'
 import { surface } from './textures'
+import { lookNew } from '../quality'
 import { applyFog, foamShadeAt, landDist, mainDist, spitDist, swash, u, vnoise, pianoRipple } from './tsl'
 
 // Ground, as the WebGL ground: field soil, beach and spit sand (ripples, grain, grit), the
@@ -107,7 +108,7 @@ export default function GroundGPU() {
       col.assign(mix(col, c('#3c3f8c').mul(0.5), float(1.0).sub(smoothstep(-1.5, -0.1, inland))))
 
       const far = smoothstep(u.grassFar.sub(9.0), u.grassFar.sub(3.0), length(xz.sub(cameraPosition.xz)))
-      const carpet = c('#8a82cf').mul(float(0.8).add(vnoise(xz.mul(0.6)).mul(0.35))).mul(float(0.85).add(vnoise(xz.mul(0.09).add(3.0)).mul(0.3)))
+      const carpet = c('#8a82cf').mul(lookNew ? 0.84 : 1.0).mul(float(0.8).add(vnoise(xz.mul(0.6)).mul(0.35))).mul(float(0.85).add(vnoise(xz.mul(0.09).add(3.0)).mul(0.3)))
       col.assign(mix(col, carpet, far.mul(float(1.0).sub(beach)).mul(step(0.0, inland))))
 
       const back = pow(max(dot(V, u.sunDir), 0.0), 5.0)

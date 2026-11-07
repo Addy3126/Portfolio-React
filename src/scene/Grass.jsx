@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { debug } from '../quality'
+import { debug, lookNew } from '../quality'
 import { bedFactor } from './beds'
 import { fogGLSL, noiseGLSL, shadowGLSL, rippleGLSL } from './glsl'
 import { BEACH_WIDTH, PIANO_POS, color, hideInReflection, landDist, mainDist, neverReflected, palette, shared } from './world'
@@ -159,6 +159,12 @@ void main(){
     t = aT;
   #endif
 
+  // Blades this level doesn't draw: off the clip volume at once, skipping the wind and shape
+  // work (the whole blade takes the same branch, so this costs nothing to the rest).
+  if (shrink <= 0.0) {
+    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+    return;
+  }
   hgt *= shrink;
   wid *= shrink;
   float c = cos(yaw), s = sin(yaw);
@@ -269,6 +275,21 @@ void main(){
   through *= mix(0.3, 1.0, sh);
   spec *= sh;
 
+#ifdef LOOK_NEW
+  // Dusk with the sun ahead: the field is mostly in its own shade (cooler, darker), the
+  // light comes through the blades and catches their edges toward the sun.
+  ambient *= 0.64;
+  float rim = spow(1.0 - abs(dot(N, V)), 2.5) * spow(dot(V, L) * 0.5 + 0.5, 3.0) * (0.3 + 0.7 * t);
+  vec3 col = albedo * (ambient + cSun * wrap * 0.36) + albedo * cSun * through * 2.2 + cSun * (spec * 0.06 + rim * sh * 0.85);
+  float frost = smoothstep(0.35, 0.95, t) * (0.55 + 0.45 * smoothstep(0.35, 0.7, vPatch.x)) * (1.0 - vKind * 0.6);
+  vec3 frostLit = cFrost * (0.32 + ambient * 0.55 + cSun * (wrap * 0.25 + through * 1.8 + rim * 0.6));
+  col = mix(col, frostLit, frost * 0.32);
+  col *= mix(0.58, 1.0, sh);
+  col *= mix(0.18, 1.0, smoothstep(0.0, 0.6, t));
+  float calm = smoothstep(5.0, 16.0, dist);
+  vec3 avg = mix(cTip, cFrost, 0.4) * (cSky * 0.72 + cSun * 0.2);
+  col = mix(col, avg, calm * 0.45);
+#else
   vec3 col = albedo * (ambient + cSun * wrap * 0.45) + albedo * cSun * through * 1.4 + cSun * spec * 0.08;
 
   // Frost on the upper blade, heavier in frosty patches.
@@ -284,6 +305,7 @@ void main(){
   float calm = smoothstep(5.0, 16.0, dist);
   vec3 avg = mix(cTip, cFrost, 0.55) * (cSky * 0.9 + cSun * 0.15);
   col = mix(col, avg, calm * 0.45);
+#endif
 
   // Blue spill from the piano.
   float pd = length(vWorld.xz - uPianoPos.xz);
@@ -299,7 +321,7 @@ function makeMaterial(hi, fadeFar = true) {
     vertexShader: vertex,
     fragmentShader: fragment,
     side: THREE.DoubleSide,
-    defines: { ...(hi ? { LOD_HI: '' } : {}), ...(fadeFar ? { FADE_FAR: '' } : {}) },
+    defines: { ...(hi ? { LOD_HI: '' } : {}), ...(fadeFar ? { FADE_FAR: '' } : {}), ...(lookNew ? { LOOK_NEW: '' } : {}) },
     uniforms: {
       ...shared,
       cBase: { value: color(palette.grassBase) },
