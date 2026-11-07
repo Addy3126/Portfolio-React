@@ -75,9 +75,9 @@ export function Startup({ tier, scale, onQuality, onDone }) {
       if (calibrate) saveCalibration(s.tier, s.scale)
       if (gl.backend && !debug.hud) gl.backend.trackTimestamp = false // no query cost while browsing
       perf.sink = null
+      if (s.phaseT) s.times[s.phase] = (s.times[s.phase] || 0) + (now - s.phaseT)
       s.phase = 'done'
       calibrated.done = true
-      if (s.phaseT) s.times[s.phase] = (s.times[s.phase] || 0) + (now - s.phaseT)
       window.__calibration = { tier: s.tier, scale: s.scale, ms: Math.round(now - s.t0), steps: s.log, times: Object.fromEntries(Object.entries(s.times).map(([k, v]) => [k, Math.round(v)])) }
       onDone()
     }
