@@ -1,9 +1,9 @@
 import './threeLog'
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { calibrate, debug, saveCalibration, settingsFor } from '../quality'
+import { calibrate, debug, markCalibrationStale, saveCalibration, settingsFor } from '../quality'
 import { decide } from './calibration'
-import { motion } from '../store'
+import { motion, setLoadingStage } from '../store'
 import { texturesReady } from '../textureReady'
 
 // Live numbers for the ?hud=1 readout (and tests): frame interval, main-thread time per
@@ -31,9 +31,11 @@ const median = (arr) => {
 // 3. Settle: the result is fixed for the visit (nothing switches while browsing) and
 //    remembered for the next one.
 const TOUR = [1, 2, 3, 2.5, 1.5, 0.5, 0]
-const MEASURE = [0, 1, 2, 3]
-const SETTLE = 3 // frames after moving before measuring (level of detail, uploads)
-const SAMPLES = 8
+// Measured: the stops and the two long flights (landing to About crosses the whole field,
+// Projects to Contact the sea at its widest).
+const MEASURE = [0, 0.5, 1, 2, 2.5, 3]
+const SETTLE = 2 // frames after moving before measuring (level of detail, uploads)
+const SAMPLES = 6
 const MAX_TIME = 20000 // ms: make no further changes after this
 const HARD_STOP = 30000 // ms: stop measuring, keep what we have
 const minScale = (tierName) => (Math.max(1, Math.min(window.devicePixelRatio, settingsFor(tierName).dpr[1])) > 1.2 ? 0.7 : 0.85)
@@ -41,11 +43,12 @@ const minScale = (tierName) => (Math.max(1, Math.min(window.devicePixelRatio, se
 export function Startup({ tier, scale, onQuality, onDone }) {
   const gl = useThree((s) => s.gl)
   const st = useRef(null)
-  if (!st.current) st.current = { phase: 'wait', mounted: 0, live: true, i: 0, f: 0, m: 0, last: 0, tier, scale, saved: 0, t0: 0, rows: [], probed: null, failed: new Set(), log: [] }
+  if (!st.current) st.current = { phase: 'wait', mounted: 0, live: true, i: 0, f: 0, m: 0, last: 0, tier, scale, saved: 0, t0: 0, rows: [], probed: null, failed: new Set(), log: [], times: {}, phaseT: 0 }
 
   useEffect(() => {
     const s = st.current
     s.live = true
+    calibrated.done = false // (again, if the WebGL scene takes over from a failed WebGPU one)
     return () => {
       s.live = false
       perf.sink = null
@@ -60,14 +63,22 @@ export function Startup({ tier, scale, onQuality, onDone }) {
     if (++s.mounted === 3) texturesReady().then(() => s.live && s.phase === 'wait' && Object.assign(s, { phase: 'grace', i: 2 }))
     if (s.phase === 'wait' || s.phase === 'done') return
 
-    const begin = (phase) => Object.assign(s, { phase, i: 0, f: 0, m: 0, rows: [], last: 0 })
+    const begin = (phase) => {
+      setLoadingStage(phase === 'warm' ? 'Warming up' : 'Finding the right settings for this screen')
+      // Time per phase, for the ?hud=1 readout (where a slow first visit spends its seconds).
+      if (s.phaseT) s.times[s.phase] = (s.times[s.phase] || 0) + (now - s.phaseT)
+      s.phaseT = now
+      Object.assign(s, { phase, i: 0, f: 0, m: 0, rows: [], last: 0 })
+    }
     const finish = () => {
       motion.progress = s.saved
       if (calibrate) saveCalibration(s.tier, s.scale)
       if (gl.backend && !debug.hud) gl.backend.trackTimestamp = false // no query cost while browsing
       perf.sink = null
       s.phase = 'done'
-      window.__calibration = { tier: s.tier, scale: s.scale, ms: Math.round(now - s.t0), steps: s.log }
+      calibrated.done = true
+      if (s.phaseT) s.times[s.phase] = (s.times[s.phase] || 0) + (now - s.phaseT)
+      window.__calibration = { tier: s.tier, scale: s.scale, ms: Math.round(now - s.t0), steps: s.log, times: Object.fromEntries(Object.entries(s.times).map(([k, v]) => [k, Math.round(v)])) }
       onDone()
     }
     const change = (tierName, sc) => {
@@ -130,15 +141,35 @@ export function Startup({ tier, scale, onQuality, onDone }) {
   return null
 }
 
+// After settling, watch in 10-second windows (visible tab only) for a sustained run of late
+// frames: two windows in a row with over a third of frames late flags the remembered result
+// for re-testing on the next visit (nothing changes now).
+function watchStale(s, dt, now) {
+  if (!calibrated.done || document.hidden || dt > 1000) return
+  if (!s.win) s.win = now
+  s.n++
+  if (dt > (1000 / pace.fps) * 1.5) s.slow++
+  if (now - s.win < 10000) return
+  s.bad = s.slow > s.n / 3 ? s.bad + 1 : 0
+  if (s.bad === 2) markCalibrationStale()
+  s.win = now
+  s.n = s.slow = 0
+}
+export const calibrated = { done: false }
+
 // Per-frame numbers: main-thread time (first to last frame callback, which includes the
 // render calls), the interval between frames, and GPU time from timestamp queries. Also the
 // render counts for ?stats=1 (window.__stats).
 export function Probe() {
-  const st = useRef({ start: 0, last: 0, since: 0, pending: false })
+  const st = useRef({ start: 0, last: 0, since: 0, pending: false, win: 0, slow: 0, n: 0, bad: 0 })
   useFrame(({ gl }) => {
     const s = st.current
     s.start = performance.now()
-    if (s.last) keep(perf.intervals, s.start - s.last)
+    if (s.last) {
+      const dt = s.start - s.last
+      keep(perf.intervals, dt)
+      watchStale(s, dt, s.start)
+    }
     s.last = s.start
     gl.info.autoReset = false
     gl.info.reset()

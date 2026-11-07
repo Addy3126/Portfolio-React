@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { fogGLSL } from './glsl'
+import { mergeStatic } from './mergeStatic'
 import { headlandTopFn } from './ScannedRocks'
 import { buildTower, buildingMaterial } from './ruins/buildings'
 import { HEADLAND_BUILDINGS, PLATEAU_BUILDINGS, SLABS, TOWERS } from './ruins/layout'
 import { seeded } from './ruins/noise3'
 import { cullHidden } from './visibility'
 import { color, shared } from './world'
+import { lookNew } from '../quality'
 
 export { TOWERS }
 
@@ -20,27 +22,39 @@ const materials = {
 
 // Project tower windows: dim until hovered, bright when selected.
 const windowVertex = /* glsl */ `
+attribute float aWarm;
 varying vec3 vWorld;
+varying float vWarm;
 void main(){
   vec4 w = modelMatrix * vec4(position, 1.0);
   vWorld = w.xyz;
+  vWarm = aWarm;
   gl_Position = projectionMatrix * viewMatrix * w;
 }
 `
 const windowFragment = /* glsl */ `
 uniform vec3 uColor;
 varying vec3 vWorld;
+varying float vWarm;
 ${fogGLSL}
 void main(){
   vec3 toP = vWorld - cameraPosition;
   float dist = length(toP);
-  gl_FragColor = vec4(applyFog(uColor, dist, toP / dist), 1.0);
+  // New look: some windows lit warm (lived in), so the project towers stand apart.
+  vec3 col = max(uColor, WARM * vWarm);
+  gl_FragColor = vec4(applyFog(col, dist, toP / dist), 1.0);
 }
 `
 // WebGL window material; userData.color is what Building animates (the WebGPU path passes
 // its own factory with the same contract).
+// Warm window light (new look); a quarter of the project towers' windows, picked per window.
+export const WARM = new THREE.Color(1.5, 0.92, 0.52)
 function windowMaterial() {
-  const m = new THREE.ShaderMaterial({ vertexShader: windowVertex, fragmentShader: windowFragment, uniforms: { ...shared, uColor: { value: DIM.clone() } } })
+  const m = new THREE.ShaderMaterial({
+    vertexShader: windowVertex,
+    fragmentShader: windowFragment.replace('WARM', `vec3(${WARM.r}, ${WARM.g}, ${WARM.b})`),
+    uniforms: { ...shared, uColor: { value: DIM.clone() } },
+  })
   m.userData.color = m.uniforms.uColor.value
   return m
 }
@@ -70,6 +84,11 @@ function windowGeometry(windows) {
   const out = new THREE.BufferGeometry()
   out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
   out.setIndex(index)
+  // Per window (4 vertices each): lit warm or not, the same on every visit.
+  const warm = new Float32Array(pos.length / 3)
+  const rand = seeded(77)
+  for (let i = 0; i < warm.length; i += 4) warm.fill(lookNew && rand() < 0.25 ? 1 : 0, i, i + 4)
+  out.setAttribute('aWarm', new THREE.Float32BufferAttribute(warm, 1))
   return out
 }
 
@@ -152,30 +171,50 @@ export default function Ruins({ hovered, selected, onHover, onSelect, mats = mat
   // The smaller ruins on the left stand in the shallows, sunk a little so they read as rooted.
   const plateau = useMemo(() => PLATEAU_BUILDINGS.map((b) => ({ spec: b, baseY: -1 })), [])
 
+  // The ruins that aren't projects never change: merged per material, one set for each side
+  // of the bay (so a side off screen is still skipped), instead of a draw call per building
+  // in the scene and again in the sea's reflection. Redone when the headland ones arrive.
+  const still = useRef()
+  useEffect(() => {
+    const g = still.current
+    const roots = [...g.children].filter((c) => !c.userData.mergedFrom)
+    const merged = [...mergeStatic(roots.filter((r) => r.position.x < 0)), ...mergeStatic(roots.filter((r) => r.position.x >= 0))]
+    merged.forEach((m) => g.add(m))
+    return () =>
+      merged.forEach((m) => {
+        g.remove(m)
+        m.geometry.dispose()
+        m.userData.mergedFrom.forEach((o) => (o.visible = true))
+      })
+  }, [headland])
+
+  const idle = (spec, i, baseY) => <Building key={i} index={i} spec={spec} baseY={baseY} state="idle" onHover={onHover} onSelect={onSelect} mats={mats} makeWindow={makeWindow} />
   return (
     <group>
-      {TOWERS.map((t, i) => (
-        <Building
-          key={i}
-          index={i}
-          spec={t}
-          baseY={0}
-          state={t.project === undefined ? 'idle' : selected === t.project ? 'selected' : hovered === t.project ? 'hover' : 'idle'}
-          onHover={onHover}
-          onSelect={onSelect}
-          mats={mats}
-          makeWindow={makeWindow}
-        />
-      ))}
-      {headland.map((h, i) => (
-        <Building key={`h${i}`} index={100 + i} spec={h.spec} baseY={h.baseY} state="idle" onHover={onHover} onSelect={onSelect} mats={mats} makeWindow={makeWindow} />
-      ))}
-      {plateau.map((p, i) => (
-        <Building key={`p${i}`} index={200 + i} spec={p.spec} baseY={p.baseY} state="idle" onHover={onHover} onSelect={onSelect} mats={mats} makeWindow={makeWindow} />
-      ))}
-      {SLABS.map(([x, z, w, h, d, ry, rz], i) => (
-        <mesh key={`s${i}`} geometry={slabGeometry(w, h, d)} material={mats.concrete} position={[x, h * 0.2, z]} rotation={[0, ry, rz]} />
-      ))}
+      {TOWERS.map(
+        (t, i) =>
+          t.project !== undefined && (
+            <Building
+              key={i}
+              index={i}
+              spec={t}
+              baseY={0}
+              state={selected === t.project ? 'selected' : hovered === t.project ? 'hover' : 'idle'}
+              onHover={onHover}
+              onSelect={onSelect}
+              mats={mats}
+              makeWindow={makeWindow}
+            />
+          ),
+      )}
+      <group ref={still}>
+        {TOWERS.map((t, i) => t.project === undefined && idle(t, i, 0))}
+        {headland.map((h, i) => idle(h.spec, 100 + i, h.baseY))}
+        {plateau.map((p, i) => idle(p.spec, 200 + i, p.baseY))}
+        {SLABS.map(([x, z, w, h, d, ry, rz], i) => (
+          <mesh key={`s${i}`} geometry={slabGeometry(w, h, d)} material={mats.concrete} position={[x, h * 0.2, z]} rotation={[0, ry, rz]} />
+        ))}
+      </group>
     </group>
   )
 }
