@@ -4,6 +4,7 @@ import Overlay from './overlay/Overlay'
 import PianoBar from './overlay/PianoBar'
 import { enterPlay, exitPlay } from './piano/engine'
 import usePianoKeyboard from './piano/usePianoKeyboard'
+import { uiSound } from './audio/ambient'
 import { SECTIONS, loading, motion } from './store'
 import { debug, gpuLabel, hasWebGL, isWindows, lookNew, qualitySource, reducedMotion, refineGuess, tier } from './quality'
 
@@ -145,7 +146,11 @@ export default function App() {
 
   useEffect(() => {
     document.body.style.cursor = hovered !== null ? 'pointer' : ''
+    if (hovered !== null && hovered !== undefined) uiSound('hover')
   }, [hovered])
+  useEffect(() => {
+    if (selected !== null && selected !== undefined) uiSound('select')
+  }, [selected])
   useEffect(() => void document.documentElement.classList.toggle('look-new', lookNew), [])
 
   const goTo = useCallback((i) => {

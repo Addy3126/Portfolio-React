@@ -2,7 +2,7 @@
 
 Aditya Sharma's portfolio: a real-time Three.js scene of an empty grand piano in a frosted field at twilight. Scrolling moves the camera between four stops: landing, About (at the piano), Projects (at the towers on the water) and Contact (at the shoreline).
 
-Built with Vite, React 19, React Three Fiber (WebGPU with a WebGL fallback), postprocessing and Lenis. The piano, grass, flowers, sea, sky and ruins are generated in code; the large rocks are photo scans and the ground, ruins and rocks use scanned surface textures (Poly Haven, CC0), and the playable piano uses the Salamander Grand Piano samples (CC BY 3.0).
+Built with Vite, React 19, React Three Fiber (WebGPU with a WebGL fallback), postprocessing and Lenis. The piano, grass, flowers, sea, sky and ruins are generated in code; the large rocks are photo scans and the ground, ruins and rocks use scanned surface textures (Poly Haven, CC0), and the playable piano uses the Salamander Grand Piano samples (CC BY 3.0). The ambience mixes generated wind, grass and window sounds with recorded water, shore and cricket loops (all CC0, from OpenGameArt: "Sea and river wave sounds", "Beach ocean waves", "Water waves" and "Crickets ambient noise (loopable)"); each section has its own mix, and it drops to 20% while you play the piano.
 
 ## Scripts
 
@@ -45,6 +45,7 @@ All text lives in `src/content.js`. Each project in `projects` is attached to on
 | `src/scene/CameraRig.jsx` | Camera stops per section, scroll interpolation, mouse parallax |
 | `src/scene/world.js` | Palette, sun direction, shared shader uniforms |
 | `src/overlay/` | HTML text panels over the canvas |
+| `src/audio/ambient.js` | Ambience: the layers, the mix per section (`MIX`), the piano duck, the tower hover/select sounds |
 | `src/quality.js` | Quality tiers, the first guess per device, the remembered calibration |
 | `src/scene/Perf.jsx` | Warm-up, load-time quality calibration, frame pacing, the readout's numbers |
 
