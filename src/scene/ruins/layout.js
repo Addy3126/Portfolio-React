@@ -2,11 +2,12 @@
 // style: concrete | brick | stone. tilt: lean in radians (z, x). broken: jagged top.
 // sunk: metres below the waterline.
 export const TOWERS = [
-  // Project towers, spread across the horizon right of the sun.
+  // Project towers: three across the horizon right of the sun, and the tall broken spire
+  // far out on the left (the fourth sat behind the third from the Projects camera).
   { x: 68, z: -218, w: 8, d: 7, h: 22, project: 0, style: 'concrete' },
   { x: 98, z: -244, w: 7, d: 7, h: 18, project: 1, style: 'brick' },
   { x: 128, z: -212, w: 9, d: 8, h: 26, project: 2, style: 'stone' },
-  { x: 162, z: -238, w: 6, d: 6, h: 17, project: 3, style: 'concrete' },
+  { x: 162, z: -238, w: 6, d: 6, h: 17, style: 'concrete' },
 
   // Left of the sun: the broken spire and a loose, uneven skyline.
   { x: -12.6, z: -191, w: 6, d: 6, h: 35, broken: true, style: 'concrete' },
@@ -16,7 +17,7 @@ export const TOWERS = [
   { x: -98, z: -214, w: 11, d: 8, h: 13, broken: true, sunk: 3, style: 'brick' },
   { x: -132, z: -252, w: 7, d: 7, h: 25, tilt: [-0.09, 0], style: 'concrete' },
   { x: -168, z: -205, w: 13, d: 10, h: 9, broken: true, style: 'stone' },
-  { x: -24, z: -430, w: 12, d: 10, h: 46, broken: true, style: 'concrete' }, // far, mostly in haze
+  { x: -24, z: -430, w: 12, d: 10, h: 46, broken: true, project: 3, style: 'concrete' }, // far, in haze
 
   // Right side, between the project towers and the headland.
   { x: -60, z: -168, w: 4, d: 4, h: 8, broken: true, tilt: [0.12, 0.05], style: 'brick' },
