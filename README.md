@@ -30,7 +30,13 @@ Every push to `main` builds the site and publishes it to GitHub Pages (`.github/
 
 ## Editing content
 
-All text lives in `src/content.js`. Each project in `projects` is attached to one lit tower (see `TOWERS` in `src/scene/Ruins.jsx`); a project's `link` is optional (use `note` for private work).
+All text lives in `src/content.js`. Each project in `projects` belongs to one lit tower (`project` in `src/scene/ruins/layout.js`). Choosing a project walks the camera up to its tower, whose front windows carry the project: the name, `pitch` and `status` along the top floor, each of `facts` in the windows below, and the brightest window opens `link`. A broken-out opening in the wall plays `preview`, a scroll-through capture of the site. Where `embed` is set (the site allows being shown inside another page) desktop visitors browse it in a panel at 80% of the screen; otherwise, and always on phones, it opens in a new tab. `slug` is the direct link to the tower (`…/#slug`).
+
+After changing a project's site, refresh its preview:
+
+```bash
+node tools/capture-previews.mjs [slug]   # writes public/previews/<slug>.webp (needs Playwright)
+```
 
 ## Layout
 
@@ -41,6 +47,7 @@ All text lives in `src/content.js`. Each project in `projects` is attached to on
 | `src/scene/Grass.jsx` | Instanced frost grass with wind |
 | `src/scene/Petals.jsx` | GPU-animated petals drifting toward the sun |
 | `src/scene/Ruins.jsx` | Towers (project hover/click targets) and the headland |
+| `src/focus.js`, `src/scene/Facade.jsx`, `src/overlay/TowerUI.jsx` | Walking up to a project tower: its stages, the lit windows and opening, the controls and the browsing panel |
 | `src/scene/Piano.jsx` | Procedural grand piano and empty bench |
 | `src/scene/CameraRig.jsx` | Camera stops per section, scroll interpolation, mouse parallax |
 | `src/scene/world.js` | Palette, sun direction, shared shader uniforms |

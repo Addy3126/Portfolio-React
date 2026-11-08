@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { SHOTS } from './CameraRig'
+import { TOWERS } from './ruins/layout'
 
 // Every place a camera can be: each stop, points along each flight between stops (with
 // the same upward arc the camera rig uses), portrait variants, and the mirror images of
@@ -21,6 +22,16 @@ const cameraSamples = (() => {
       }
     }
   }
+  // In front of each project tower's face (the camera walks up to it) and along the glides
+  // between them and from the Projects stop.
+  const fronts = TOWERS.filter((t) => t.project !== undefined)
+    .sort((p, q) => p.project - q.project)
+    .flatMap((t) => [4, 8, 16].flatMap((dz) => [3, 9, 15].map((y) => new THREE.Vector3(t.x, y, t.z + t.d / 2 + dz))))
+  pts.push(...fronts)
+  const stops = [SHOTS[2].pos, ...fronts.filter((_, i) => i % 9 === 4)]
+  for (let i = 0; i < stops.length; i++)
+    for (let j = i + 1; j < stops.length; j++)
+      for (let k = 1; k < 10; k++) pts.push(stops[i].clone().lerp(stops[j], k / 10).add(new THREE.Vector3(0, Math.sin((k / 10) * Math.PI) * 4, 0)))
   const mirrored = pts.map((p) => new THREE.Vector3(p.x, 2 * SEA_Y - p.y, p.z))
   return [...pts, ...mirrored]
 })()

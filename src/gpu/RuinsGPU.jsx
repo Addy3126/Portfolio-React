@@ -17,6 +17,7 @@ import {
   pow,
   reflect,
   smoothstep,
+  step,
   texture,
   uniform,
   vec2,
@@ -128,12 +129,14 @@ function windowMaterialGPU() {
   const col = DIM.clone()
   const uc = uniform(col)
   m.userData.color = col
+  const share = uniform(0)
+  m.userData.share = share
   const warm = attribute('aWarm', 'float')
   m.colorNode = Fn(() => {
     const toP = positionWorld.sub(cameraPosition)
     const dist = length(toP)
-    // New look: some windows lit warm (as scene/Ruins.jsx).
-    return applyFog(max(uc, vec3(WARM.r, WARM.g, WARM.b).mul(warm)), dist, toP.div(dist))
+    // New look: some windows lit warm, more on visited towers (as scene/Ruins.jsx).
+    return applyFog(max(uc, vec3(WARM.r, WARM.g, WARM.b).mul(step(warm, share))), dist, toP.div(dist))
   })()
   return m
 }

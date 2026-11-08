@@ -251,12 +251,12 @@ let ctx = null
 let master = null
 let graph = null
 let mixTimer = null
-let ducked = false
+const ducks = new Set() // what's asking for the ambience to drop (the piano, the browsing panel)
 const timers = []
 
 function level() {
   if (!ambient.on || document.hidden) return 0
-  return MASTER * (ducked ? DUCK : 1)
+  return MASTER * (ducks.size ? DUCK : 1)
 }
 function applyLevel(time = 0.6) {
   if (master) master.gain.setTargetAtTime(level(), ctx.currentTime, time)
@@ -317,17 +317,36 @@ function arm() {
   document.addEventListener('visibilitychange', () => applyLevel(0.3))
   // At the piano: ambience down to 20% so the notes sit on top.
   onPiano((e) => {
-    if (e.type !== 'play') return
-    ducked = e.on
-    applyLevel(0.6)
+    if (e.type === 'play') duck('piano', e.on)
   })
 }
 if (typeof window !== 'undefined' && lookNew) arm() // (the earlier look had no sound)
 
-// A soft tick for hovering a project tower, a two-note chime for choosing one.
+// Ambience down to 20% while something needs the foreground (smooth, about 0.6 s).
+export function duck(source, on) {
+  if (on) ducks.add(source)
+  else ducks.delete(source)
+  applyLevel(0.6)
+}
+
+// A soft tick for hovering a project tower, a two-note chime for choosing one, and a very
+// quiet click as each of its windows catches.
 export function uiSound(kind) {
   if (!ctx || !ambient.on || document.hidden) return
   const t = ctx.currentTime
+  if (kind === 'power') {
+    const o = ctx.createOscillator()
+    o.type = 'triangle'
+    o.frequency.value = 2300 + Math.random() * 500
+    const a = ctx.createGain()
+    a.gain.setValueAtTime(0, t)
+    a.gain.linearRampToValueAtTime(0.012, t + 0.002)
+    a.gain.exponentialRampToValueAtTime(0.0001, t + 0.05)
+    o.connect(a).connect(ctx.destination)
+    o.start(t)
+    o.stop(t + 0.08)
+    return
+  }
   const notes = kind === 'select' ? [880, 1320] : [1560]
   notes.forEach((f, i) => {
     const o = ctx.createOscillator()

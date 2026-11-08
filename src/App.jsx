@@ -2,6 +2,9 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import Lenis from 'lenis'
 import Overlay from './overlay/Overlay'
 import PianoBar from './overlay/PianoBar'
+import TowerUI, { useFocus } from './overlay/TowerUI'
+import { enterTower, focus, leaveTower } from './focus'
+import { projects } from './content'
 import { enterPlay, exitPlay } from './piano/engine'
 import usePianoKeyboard from './piano/usePianoKeyboard'
 import { uiSound } from './audio/ambient'
@@ -79,7 +82,10 @@ const webgl = hasWebGL()
 export default function App() {
   const [ready, setReady] = useState(!webgl)
   const [hovered, setHovered] = useState(null)
-  const [selected, setSelected] = useState(null)
+  // Choosing a project walks the camera up to its tower (focus.js); the page stops
+  // scrolling there until you leave.
+  const { project: selected } = useFocus()
+  const setSelected = useCallback((i) => (i === null || i === undefined ? leaveTower() : enterTower(i)), [])
   const lenis = useRef(null)
   // Seated at the piano: page scrolling stops, the camera moves to the keys and the piano
   // controls replace the panels.
@@ -149,11 +155,39 @@ export default function App() {
     if (hovered !== null && hovered !== undefined) uiSound('hover')
   }, [hovered])
   useEffect(() => {
-    if (selected !== null && selected !== undefined) uiSound('select')
+    const at = selected !== null && selected !== undefined
+    if (at) uiSound('select')
+    if (at) setHovered(null)
+    document.documentElement.classList.toggle('at-tower', at)
+    if (at) lenis.current?.stop()
+    else if (!playing) lenis.current?.start()
+    // The address follows the tower, so it can be shared (…/#slug).
+    const hash = at ? `#${projects[selected].slug}` : ''
+    if (window.location.hash !== hash) history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected])
+  // A link to a tower (…/#slug) opens on it once the scene is up: straight to the Projects
+  // view, then the walk to the tower.
+  useEffect(() => {
+    if (!ready) return
+    const go = () => {
+      const i = projects.findIndex((p) => `#${p.slug}` === window.location.hash)
+      if (i < 0) return focus.project !== null && !window.location.hash && leaveTower()
+      const limit = document.documentElement.scrollHeight - window.innerHeight
+      lenis.current?.scrollTo((limit * 2) / (SECTIONS.length - 1), { immediate: true, force: true })
+      setTimeout(() => enterTower(i), 400)
+    }
+    go()
+    window.addEventListener('hashchange', go)
+    return () => window.removeEventListener('hashchange', go)
+  }, [ready])
   useEffect(() => void document.documentElement.classList.toggle('look-new', lookNew), [])
 
   const goTo = useCallback((i) => {
+    if (focus.project !== null) {
+      leaveTower()
+      lenis.current?.start()
+    }
     const limit = document.documentElement.scrollHeight - window.innerHeight
     const y = (limit * i) / (SECTIONS.length - 1)
     if (lenis.current) lenis.current.scrollTo(y, { duration: reducedMotion ? 0 : 2.4 })
@@ -195,6 +229,7 @@ export default function App() {
         onPlay={webgl ? startPlaying : null}
       />
       {playing && <PianoBar onExit={stopPlaying} />}
+      {webgl && <TowerUI hovered={hovered} />}
       {/* Scroll distance: 2.4 screens per section, so a small flick moves within a section
           rather than skipping to the next. */}
       <div className="scroll-space" style={{ height: `${100 + (SECTIONS.length - 1) * 240}vh` }} />
