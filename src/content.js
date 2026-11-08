@@ -76,6 +76,7 @@ export const projects = [
       ['Front end', 'React · Redux Toolkit'],
       ['Data', 'React Query · Formik'],
       ['Style', 'Tailwind CSS'],
+      ['Account', 'Profile · password change'],
     ],
     link: 'https://github.com/Addy3126/Finance-Tracker-using-MERN',
     linkLabel: 'View code',

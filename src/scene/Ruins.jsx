@@ -146,7 +146,8 @@ function Building({ spec, index, baseY = 0, state, hovered, onHover, onSelect, m
   useFrame((_, dt) => {
     if (!windowMat) return
     windowMat.userData.share.value = lookNew ? (isVisited(spec.project) ? 0.55 : 0.25) : 0
-    const target = state === 'selected' ? 1 : state === 'hover' || focus.project === spec.project ? 0.6 : 0
+    // At the tower its spare windows stay dark glass beside the lit ones.
+    const target = focus.project === spec.project ? 0 : state === 'selected' ? 1 : state === 'hover' ? 0.6 : 0
     level.current += (target - level.current) * Math.min(1, dt * 5)
     const l = level.current
     windowMat.userData.color.copy(DIM).lerp(l > 0.6 ? LIT : HOVER, Math.min(1, l / (l > 0.6 ? 1 : 0.6)))

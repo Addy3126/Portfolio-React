@@ -76,27 +76,23 @@ const up = new THREE.Vector3(0, 1, 0)
 
 // Walking up to a project tower (focus.js): where the camera stands for each stage. The
 // face, or the opening, is fitted to the screen at the current aspect; on phones the lower
-// part of the screen holds the project's text, so the tower sits in the upper part.
+// part of the screen holds the project's text and the top the site's header, so the tower
+// fits the band between them (12% to 58% of the height).
 const FIT = { facade: 1, opening: 0.72, inside: 0.72 }
+const BAND = { top: 0.12, bottom: 0.58 }
 function towerPose(project, stage, aspect, fovDeg, portrait, pos, look) {
   const f = facades.get(project)
   if (!f) return false
   const tanV = Math.tan(THREE.MathUtils.degToRad(fovDeg) / 2)
   const tanH = tanV * aspect
-  const frac = portrait ? 0.56 : 1
-  if (stage === 'facade') {
-    const W = f.width + 3
-    const H = f.height + 2.6
-    const dist = Math.max(H / frac / 2 / tanV, W / 2 / tanH)
-    look.set(f.center.x, f.center.y - (H / frac - H) / 2, f.frontZ)
-    pos.set(f.center.x, f.center.y - 1.2, f.frontZ + dist)
-  } else {
-    const o = f.opening
-    let dist = Math.max(o.h / FIT[stage] / frac / 2 / tanV, o.w / FIT[stage] / 2 / tanH)
-    if (stage === 'inside') dist *= 0.45 // pushing in as the panel opens
-    look.set(o.center.x, o.center.y - (portrait ? (o.h / frac - o.h) / 2 : 0), f.frontZ)
-    pos.set(o.center.x, o.center.y - 0.3, f.frontZ + dist)
-  }
+  const frac = portrait ? BAND.bottom - BAND.top : 1
+  // How far below the target the camera looks, so the target lands in the band's middle.
+  const lift = (dist) => (portrait ? (0.5 - (BAND.top + BAND.bottom) / 2) * 2 * dist * tanV : 0)
+  const [c, w, h, fit] = stage === 'facade' ? [f.center, f.width + 3, f.height + 2.6, 1] : [f.opening.center, f.opening.w, f.opening.h, FIT[stage]]
+  let dist = Math.max(h / fit / frac / 2 / tanV, w / fit / 2 / tanH)
+  if (stage === 'inside') dist *= 0.45 // pushing in as the panel opens
+  look.set(c.x, c.y - lift(dist), f.frontZ)
+  pos.set(c.x, c.y - (stage === 'facade' ? 1.2 : 0.3) - lift(dist), f.frontZ + dist)
   return true
 }
 const ride = { key: null, active: false, t0: 0, dur: 0, arc: 0, from: { pos: new THREE.Vector3(), look: new THREE.Vector3() } }

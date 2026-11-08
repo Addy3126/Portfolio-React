@@ -258,10 +258,12 @@ kbd { font: 600 10px/1 inherit; padding: 3px 5px; border: 1px solid var(--line);
   .project-list button { min-height: 44px; }
   .piano-controls button, .piano-controls .pedal, .octave { min-height: 44px; }
   .piano-note { font-size: 40px; top: 12vh; }
-  .tower-card { left: 16px; right: 16px; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 104px); top: auto; width: auto; height: auto; max-height: 34vh; overflow-y: auto; clip-path: none; white-space: normal; padding: 16px 18px; background: rgba(14, 12, 40, 0.8); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 19; animation: card-in 0.6s ease 0.6s both; }
+  .tower-card { left: 16px; right: 16px; bottom: calc(max(16px, env(safe-area-inset-bottom)) + 58px); top: auto; width: auto; height: auto; max-height: 30vh; overflow-y: auto; clip-path: none; white-space: normal; padding: 16px 18px; background: rgba(14, 12, 40, 0.8); border: 1px solid var(--line); border-radius: 6px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 19; animation: card-in 0.6s ease 0.6s both; }
   .tower-card h2 { font-size: 24px; }
-  .tower-bar button, .tower-bar a { min-height: 44px; }
-  .tower-bar .tb-name { max-width: 40vw; }
+  .tower-bar { flex-wrap: nowrap; gap: 6px; }
+  .tower-bar button, .tower-bar a { min-height: 44px; padding: 6px 14px; white-space: nowrap; }
+  .tower-bar .tb-nav button { min-height: 40px; padding: 2px 14px; }
+  .tower-bar .tb-name { display: none; } /* the card above names the project */
 }
 
 @media (prefers-reduced-motion: reduce) {

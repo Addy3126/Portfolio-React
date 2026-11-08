@@ -86,6 +86,7 @@ export default function App() {
   // scrolling there until you leave.
   const { project: selected } = useFocus()
   const setSelected = useCallback((i) => (i === null || i === undefined ? leaveTower() : enterTower(i)), [])
+  const firstFocus = useRef(true)
   const lenis = useRef(null)
   // Seated at the piano: page scrolling stops, the camera moves to the keys and the piano
   // controls replace the panels.
@@ -161,7 +162,12 @@ export default function App() {
     document.documentElement.classList.toggle('at-tower', at)
     if (at) lenis.current?.stop()
     else if (!playing) lenis.current?.start()
-    // The address follows the tower, so it can be shared (…/#slug).
+    // The address follows the tower, so it can be shared (…/#slug); not on the first render,
+    // which would drop a link's tower before the scene is up to walk to it.
+    if (firstFocus.current) {
+      firstFocus.current = false
+      return
+    }
     const hash = at ? `#${projects[selected].slug}` : ''
     if (window.location.hash !== hash) history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`)
     // eslint-disable-next-line react-hooks/exhaustive-deps
