@@ -99,6 +99,10 @@ export const shared = {
   uRippleT: { value: new THREE.Vector4(-1e4, -1e4, -1e4, -1e4) },
   uRippleA: { value: new THREE.Vector4() },
   uGrassHi: { value: 0 },
+  // Colour grade (scene/grade.js): highlight and shadow tints, contrast curve strength.
+  uGradeHigh: { value: new THREE.Vector3(1.07, 1.0, 0.93) },
+  uGradeShadow: { value: new THREE.Vector3(0.9, 0.94, 1.08) },
+  uGradeCurve: { value: 0.22 },
 }
 
 export const color = c

@@ -4,7 +4,7 @@ import { EffectComposer, GodRays, N8AO, Noise, SMAA, ToneMapping, Vignette, wrap
 import { BlendFunction, Effect, EffectAttribute, KernelSize, ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import { reducedMotion } from '../quality'
-import { SUN_DIR } from './world'
+import { SUN_DIR, shared } from './world'
 
 const SUN_DISTANCE = 1400
 
@@ -16,20 +16,23 @@ class GradeEffect extends Effect {
     super(
       'GradeEffect',
       /* glsl */ `
+      uniform vec3 uGradeHigh;
+      uniform vec3 uGradeShadow;
+      uniform float uGradeCurve;
       void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
         vec3 c = clamp(inputColor.rgb, 0.0, 1.0);
         float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-        vec3 shadowTint = vec3(0.9, 0.94, 1.08);
-        vec3 highTint = vec3(1.07, 1.0, 0.93);
-        c *= mix(shadowTint, vec3(1.0), smoothstep(0.0, 0.45, l));
-        c *= mix(vec3(1.0), highTint, smoothstep(0.45, 1.0, l));
+        // Tints and curve strength per section (scene/grade.js).
+        c *= mix(uGradeShadow, vec3(1.0), smoothstep(0.0, 0.45, l));
+        c *= mix(vec3(1.0), uGradeHigh, smoothstep(0.45, 1.0, l));
         vec3 s = c * c * (3.0 - 2.0 * c);
-        c = mix(c, s, 0.22);
+        c = mix(c, s, uGradeCurve);
         float l2 = dot(c, vec3(0.2126, 0.7152, 0.0722));
         float sat = max(max(c.r, c.g), c.b) - min(min(c.r, c.g), c.b);
         c = mix(vec3(l2), c, 1.0 + 0.18 * (1.0 - sat));
         outputColor = vec4(clamp(c, 0.0, 1.0), inputColor.a);
       }`,
+      { uniforms: new Map([['uGradeHigh', shared.uGradeHigh], ['uGradeShadow', shared.uGradeShadow], ['uGradeCurve', shared.uGradeCurve]]) },
     )
   }
 }

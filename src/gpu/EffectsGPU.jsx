@@ -57,9 +57,10 @@ const LUMA = vec3(0.2126, 0.7152, 0.0722)
 const grade = Fn(([c0]) => {
   const c = clamp(c0, 0.0, 1.0).toVar()
   const l = dot(c, LUMA)
-  c.mulAssign(mix(vec3(0.9, 0.94, 1.08), vec3(1.0), smoothstep(0.0, 0.45, l)))
-  c.mulAssign(mix(vec3(1.0), vec3(1.07, 1.0, 0.93), smoothstep(0.45, 1.0, l)))
-  c.assign(mix(c, c.mul(c).mul(vec3(3.0).sub(c.mul(2.0))), 0.22))
+  // Tints and curve strength per section (scene/grade.js).
+  c.mulAssign(mix(u.gradeShadow, vec3(1.0), smoothstep(0.0, 0.45, l)))
+  c.mulAssign(mix(vec3(1.0), u.gradeHigh, smoothstep(0.45, 1.0, l)))
+  c.assign(mix(c, c.mul(c).mul(vec3(3.0).sub(c.mul(2.0))), u.gradeCurve))
   const l2 = dot(c, LUMA)
   const sat = max(max(c.r, c.g), c.b).sub(min(min(c.r, c.g), c.b))
   return clamp(mix(vec3(l2), c, float(1.0).add(float(1.0).sub(sat).mul(0.18))), 0.0, 1.0)

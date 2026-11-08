@@ -19,6 +19,7 @@ import {
   positionWorld,
   reflect,
   reflector,
+  sin,
   smoothstep,
   varying,
   vec2,
@@ -26,8 +27,9 @@ import {
   min,
   texture,
 } from 'three/tsl'
-import { LANES, LANE_DIR } from '../scene/sunLanes'
+import { FOAM_REACH, FOOTPRINTS, LANES, LANE_DIR } from '../scene/sunLanes'
 import { NEVER_REFLECTED, color, palette } from '../scene/world'
+import { lookNew } from '../quality'
 import { surface } from './textures'
 import { applyFog, foamShadeAt, landDist, seabedY, spow, swash, u, viewNormal, vnoise, voronoi2 } from './tsl'
 
@@ -192,6 +194,19 @@ function seaMaterial(refl) {
     // Shore swash foam (shared with the ground so they meet seamlessly).
     const sw = swash(p, L, t)
     col.assign(mix(col, foamShadeAt(c('#e4dcff'), V, p, sw.y), sw.y.mul(0.92)))
+    if (lookNew) {
+      // Foam hugging the towers where they stand in the water (as scene/Sea.jsx).
+      const tf = float(0.0).toVar()
+      for (const [fx, fz, hx, hz] of FOOTPRINTS) {
+        const q = abs(p.sub(vec2(fx, fz))).sub(vec2(hx, hz))
+        tf.assign(max(tf, float(1.0).sub(smoothstep(FOAM_REACH * 0.2, FOAM_REACH, length(max(q, vec2(0.0)))))))
+      }
+      // A thin bright line where the water meets the wall, then patches drifting outward.
+      const n = vnoise(p.mul(2.2).add(vec2(t.mul(0.4), t.mul(-0.3)))).mul(0.65).add(vnoise(p.mul(7.0).sub(t.mul(0.6))).mul(0.35))
+      const line = smoothstep(0.85, 1.0, tf).mul(sin(t.mul(1.4).add(p.x.mul(0.7)).add(p.y.mul(0.5))).mul(0.2).add(0.65))
+      const fa = max(line, tf.mul(smoothstep(0.42, 0.78, n)))
+      col.assign(mix(col, foamShadeAt(c('#e4dcff'), V, p, fa), fa.mul(0.9)))
+    }
     return applyFog(col, dist, V)
   })()
   return m

@@ -2,7 +2,8 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { motion } from '../store'
-import { reducedMotion } from '../quality'
+import { updateGrade } from './grade'
+import { lookNew, reducedMotion } from '../quality'
 import { PIANO_POS, SUN_DIR } from './world'
 import { WHITE_MIDI, piano } from '../piano/engine'
 
@@ -22,11 +23,16 @@ export const SHOTS = [
     look: v(-2.6, 0.85, 3.3),
     portrait: { pos: v(-4.4, 1.7, 8.7), look: v(-1.9, 0.3, 3.6) },
   },
-  {
-    pos: v(70, 9, -120),
-    look: v(87, 15, -218),
-    portrait: { pos: v(75, 16, -40), look: v(112, 15, -230) },
-  },
+  // Projects. The new look comes closer and lower, so the four project towers loom over the
+  // water instead of standing small beyond an empty foreground (the same direction of view;
+  // all four stay in frame down to 16:9).
+  lookNew
+    ? { pos: v(75, 5, -150), look: v(98, 14, -224), portrait: { pos: v(75, 16, -40), look: v(112, 15, -230) } }
+    : {
+        pos: v(70, 9, -120),
+        look: v(87, 15, -218),
+        portrait: { pos: v(75, 16, -40), look: v(112, 15, -230) },
+      },
   {
     pos: contactPos,
     look: contactPos
@@ -132,6 +138,7 @@ export default function CameraRig() {
     }
     camera.position.copy(tmpPos)
     camera.lookAt(tmpLook)
+    updateGrade(p) // the colour grade follows the camera between sections
   })
 
   return null

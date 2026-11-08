@@ -34,6 +34,7 @@ import { scatter, seeded, stemGeometry } from '../scene/FieldFlowers'
 import { BOX_MIN, BOX_SIZE } from '../scene/Petals'
 import { lilyGeometry, toInstanced } from '../scene/flower'
 import { color } from '../scene/world'
+import { lookNew } from '../quality'
 import { NEVER_REFLECTED, REFLECTION_HIDDEN } from './SeaGPU'
 import { applyFog, hash12, spow, u, viewNormal, vnoise } from './tsl'
 
@@ -118,7 +119,9 @@ function shadeFlower(V, fuv, part, kind, glowIn, N) {
 // Rotate v by the basis (xb, up, zb) (columns of a rotation matrix).
 const basis = (xb, up, zb, v) => xb.mul(v.x).add(up.mul(v.y)).add(zb.mul(v.z))
 
-function finishFlower(m, worldNode, normalNode, kindNode) {
+// rim: the floating flowers' backlit edge (new look), so against the bright sky they read
+// as dark flowers rimmed with light rather than specks of dust.
+function finishFlower(m, worldNode, normalNode, kindNode, rim = false) {
   m.positionNode = worldNode
   const vN = varying(normalNode)
   m.normalNode = viewNormal(normalize(vN).mul(faceDirection))
@@ -131,7 +134,12 @@ function finishFlower(m, worldNode, normalNode, kindNode) {
     const V = toP.div(dist)
     const glow = float(1.0).sub(smoothstep(5.0, 25.0, dist))
     const N = normalize(vN.add(vec3(0, 1e-5, 0))).mul(faceDirection).toVar()
-    return applyFog(shadeFlower(V, vUv, vPart, vKind, glow, N), dist, V)
+    const col = shadeFlower(V, vUv, vPart, vKind, glow, N).toVar()
+    if (rim) {
+      const edge = pow(float(1.0).sub(abs(dot(N, V))), 3.0).mul(pow(dot(V, u.sunDir).mul(0.5).add(0.5), 2.5))
+      col.addAssign(C.sun.mul(edge).mul(0.9))
+    }
+    return applyFog(col, dist, V)
   })()
 }
 
@@ -257,13 +265,14 @@ function petalMaterial() {
     pxz.y.add(cos(t.mul(0.3).mul(speed).add(ph)).mul(1.2)),
   )
   const camDist = distance(p, cameraPosition)
-  const size = iSeed2.y.mul(0.085).add(0.085).mul(camDist.div(6.0).clamp(0.4, 1.0))
+  // (Slightly larger in the new look, where there are fewer of them.)
+  const size = iSeed2.y.mul(0.085).add(0.085).mul(camDist.div(6.0).clamp(0.4, 1.0)).mul(lookNew ? 1.15 : 1.0)
   const axis = normalize(vec3(iSeed2.z.sub(0.5), 0.6, iSeed2.w.sub(0.5)))
   const ang = t.mul(iSeed2.z.mul(0.45).add(0.2)).add(ph)
   // Rodrigues rotation about `axis`.
   const rot = (v) => v.mul(cos(ang)).add(cross(axis, v).mul(sin(ang))).add(axis.mul(dot(axis, v)).mul(float(1.0).sub(cos(ang))))
   const P = attribute('position', 'vec3')
-  finishFlower(m, p.add(rot(P.mul(size))), rot(attribute('normal', 'vec3')), float(0.0))
+  finishFlower(m, p.add(rot(P.mul(size))), rot(attribute('normal', 'vec3')), float(0.0), lookNew)
   return m
 }
 

@@ -22,7 +22,7 @@ import {
   vec2,
   vec3,
 } from 'three/tsl'
-import Ruins, { DIM } from '../scene/Ruins'
+import Ruins, { DIM, WARM } from '../scene/Ruins'
 import { color } from '../scene/world'
 import { rockMaterialsGPU } from './RocksGPU'
 import { surface } from './textures'
@@ -128,10 +128,12 @@ function windowMaterialGPU() {
   const col = DIM.clone()
   const uc = uniform(col)
   m.userData.color = col
+  const warm = attribute('aWarm', 'float')
   m.colorNode = Fn(() => {
     const toP = positionWorld.sub(cameraPosition)
     const dist = length(toP)
-    return applyFog(uc, dist, toP.div(dist))
+    // New look: some windows lit warm (as scene/Ruins.jsx).
+    return applyFog(max(uc, vec3(WARM.r, WARM.g, WARM.b).mul(warm)), dist, toP.div(dist))
   })()
   return m
 }

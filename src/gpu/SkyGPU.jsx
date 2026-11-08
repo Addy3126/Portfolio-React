@@ -27,7 +27,7 @@ import {
   vec3,
   vec4,
 } from 'three/tsl'
-import { tier } from '../quality'
+import { lookNew, tier } from '../quality'
 import { DRIFT, useCloudDrift } from '../scene/cloudDrift'
 import { color, palette } from '../scene/world'
 import { fbm3g, hash12, u, vnoise3 } from './tsl'
@@ -161,6 +161,15 @@ export default function SkyGPU() {
       const disc = smoothstep(0.99955, 0.99975, sd).mul(smoothstep(-0.004, 0.003, h))
       col.addAssign(vec3(7.0, 6.4, 6.2).mul(disc).mul(mix(0.15, 1.0, clear)))
       col.addAssign(vec3(1.6, 1.3, 1.35).mul(pow(sd, 500.0)).mul(mix(0.4, 1.0, clear)))
+      if (lookNew) {
+        // Warm atmospheric glow round the low sun: a tight corona and a wide soft halo.
+        col.addAssign(
+          vec3(1.0, 0.8, 0.74)
+            .mul(pow(sd, 2500.0).mul(1.1).add(pow(sd, 90.0).mul(0.16)))
+            .mul(mix(0.35, 1.0, clear))
+            .mul(smoothstep(-0.03, 0.01, h)),
+        )
+      }
       // Salt-spray haze just above the horizon, so sea and sky meet softly.
       const haze = exp(max(h, 0.0).mul(-38.0)).mul(smoothstep(-0.02, 0.0, h))
       col.assign(mix(col, mix(u.fogColor, u.fogGlow, pow(sd, 6.0).mul(0.8)).mul(1.06), haze.mul(0.42)))

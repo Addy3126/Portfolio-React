@@ -23,7 +23,7 @@ import {
   offset,
   outline,
 } from './piano/geometry'
-import { debug } from '../quality'
+import { debug, lookNew } from '../quality'
 import { NEVER_REFLECTED, PIANO_CENTRE, PIANO_POS, palette, shared } from './world'
 
 const LID_ANGLE = 0.58
@@ -39,13 +39,19 @@ const FINISHES = {
   pearl: { color: '#ebe8f8', roughness: 0.12 },
 }
 
+// New look: the white finishes a touch warmer (ivory against the violet dusk, so the piano
+// no longer melts into the sky behind it), the base coat satin and the clear coat sharper,
+// so it reads as glossy lacquer with crisp reflections rather than flat paint.
+const FINISH_NEW = { white: { color: '#f4eee6', roughness: 0.2 }, pearl: { color: '#f1ece6', roughness: 0.2 } }
+
 export function pianoMaterials(d) {
   const lacquer = new THREE.MeshPhysicalMaterial({
     ...FINISHES[d.finish],
+    ...(lookNew ? FINISH_NEW[d.finish] : {}),
     clearcoat: 1,
     // No clearcoat normal map: three.js derives its tangent frame from screen-space
     // derivatives, which degenerate on some edge pixels and produce NaN (black specks).
-    clearcoatRoughness: 0.11,
+    clearcoatRoughness: lookNew ? 0.05 : 0.11,
   })
   const spruce = spruceTextures()
   const hammertone = noiseBump({ seed: 3, dots: 3400, repeat: [5, 5] })

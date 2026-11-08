@@ -17,8 +17,9 @@ export function mergeStatic(roots, skip = () => false) {
       if (o.isMesh && !o.isInstancedMesh && !o.isSkinnedMesh && !Array.isArray(o.material) && !o.morphTargetInfluences) {
         const g = o.geometry
         const attrs = Object.keys(g.attributes).sort()
-        const key = `${o.material.uuid}|${attrs.join(',')}|${g.index ? 'i' : 'n'}|${o.castShadow}|${o.receiveShadow}|${o.renderOrder}`
-        if (!buckets.has(key)) buckets.set(key, { material: o.material, meshes: [], matrices: [], cast: o.castShadow, receive: o.receiveShadow, order: o.renderOrder })
+        const key = `${o.material.uuid}|${attrs.join(',')}|${g.index ? 'i' : 'n'}|${o.castShadow}|${o.receiveShadow}|${o.renderOrder}|${o.layers.mask}`
+        if (!buckets.has(key))
+          buckets.set(key, { material: o.material, meshes: [], matrices: [], cast: o.castShadow, receive: o.receiveShadow, order: o.renderOrder, layers: o.layers.mask })
         const mat = o.matrixWorld.clone()
         if (rootInv) mat.premultiply(rootInv)
         buckets.get(key).meshes.push(o)
@@ -46,6 +47,8 @@ export function mergeStatic(roots, skip = () => false) {
     mesh.castShadow = b.cast
     mesh.receiveShadow = b.receive
     mesh.renderOrder = b.order
+    mesh.layers.mask = b.layers
+    mesh.userData.mergedFrom = b.meshes // (to undo: show these again, dispose the merged mesh)
     merged.push(mesh)
     for (const o of b.meshes) o.visible = false
   }

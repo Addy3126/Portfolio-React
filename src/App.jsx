@@ -4,8 +4,8 @@ import Overlay from './overlay/Overlay'
 import PianoBar from './overlay/PianoBar'
 import { enterPlay, exitPlay } from './piano/engine'
 import usePianoKeyboard from './piano/usePianoKeyboard'
-import { SECTIONS, motion } from './store'
-import { debug, gpuLabel, hasWebGL, isWindows, qualitySource, reducedMotion, tier } from './quality'
+import { SECTIONS, loading, motion } from './store'
+import { debug, gpuLabel, hasWebGL, isWindows, lookNew, qualitySource, reducedMotion, refineGuess, tier } from './quality'
 
 // Renderer: the WebGPU scene where the browser has WebGPU, the WebGL scene otherwise (and if
 // WebGPU fails to start or its device is lost). ?renderer=webgl / ?renderer=webgpu force one.
@@ -29,14 +29,14 @@ function Hud() {
       const st = window.__stats
       const cv = document.querySelector('canvas')
       const iv = p?.intervals ?? []
-      const fps = iv.length ? 1000 / (iv.reduce((a, b) => a + b, 0) / iv.length) : null
+      const fps = iv.length ? 1000 / pct(iv, 0.5) : null // median: one long pause doesn't skew it
       const budget = 1000 / (window.__pace?.fps ?? 60)
       const long = iv.filter((v) => v > budget * 1.6).length
       setLines([
-        `${window.__backend ?? 'webgl'} · ${c ? `${c.tier} · ${Math.round(c.scale * 100)}%` : `${tier} · ${qualitySource}…`} · ${cv ? `${cv.width}×${cv.height}` : ''} · target ${Math.round(1000 / budget)} fps`,
+        `${window.__backend ?? 'webgl'} · ${c ? `${c.tier} · ${Math.round(c.scale * 100)}%` : `${tier} · ${qualitySource}…`} · ${cv ? `${cv.width}×${cv.height}` : ''} · target ${Math.round(1000 / budget)} fps${window.__pace ? ` (${window.__pace.refresh} Hz ÷ ${window.__pace.every})` : ''}`,
         `${f(fps)} fps · frame ${f(pct(iv, 0.5))} / ${f(pct(iv, 0.95))} ms (p50/p95) · ${long} long of ${iv.length}`,
         `main thread ${f(pct(p?.cpu, 0.5))} / ${f(pct(p?.cpu, 0.95))} ms · GPU ${p?.gpu?.length ? `${f(pct(p.gpu, 0.5))} ms` : 'n/a (no timestamps)'}`,
-        `${st ? `${st.calls} draws · ${(st.triangles / 1e6).toFixed(2)}M tris` : ''}${c ? ` · settled in ${(c.ms / 1000).toFixed(1)} s${c.steps.length ? `: ${c.steps.join(' → ')}` : ` (${qualitySource})`}` : ''}`,
+        `${st ? `${st.calls} draws · ${(st.triangles / 1e6).toFixed(2)}M tris` : ''}${c ? ` · settled in ${(c.ms / 1000).toFixed(1)} s (${Object.entries(c.times ?? {}).map(([k, v]) => `${k} ${(v / 1000).toFixed(1)}`).join(', ')})${c.steps.length ? `: ${c.steps.join(' → ')}` : ` (${qualitySource})`}` : ''}`,
         gpuLabel,
       ])
     }, 500)
@@ -48,10 +48,26 @@ function Hud() {
     </div>
   )
 }
+// Under the loader's title: what it's waiting for (a first visit also measures this
+// screen's performance, which takes a few seconds), with a slow line moving beneath.
+function LoaderStage() {
+  const [stage, setStage] = useState(loading.stage)
+  useEffect(() => {
+    loading.listeners.add(setStage)
+    return () => loading.listeners.delete(setStage)
+  }, [])
+  return (
+    <small className="loader-stage" aria-live="polite">
+      {stage}
+    </small>
+  )
+}
+
 async function pickRenderer() {
   if (forced === 'webgl' || forced === 'webgpu') return forced
   try {
     const adapter = await navigator.gpu?.requestAdapter(isWindows ? undefined : { powerPreference: 'high-performance' })
+    refineGuess(adapter?.info) // a better first quality guess where the GPU name is hidden
     return adapter ? 'webgpu' : 'webgl'
   } catch {
     return 'webgl'
@@ -130,6 +146,7 @@ export default function App() {
   useEffect(() => {
     document.body.style.cursor = hovered !== null ? 'pointer' : ''
   }, [hovered])
+  useEffect(() => void document.documentElement.classList.toggle('look-new', lookNew), [])
 
   const goTo = useCallback((i) => {
     const limit = document.documentElement.scrollHeight - window.innerHeight
@@ -160,6 +177,7 @@ export default function App() {
       {!loaderGone && (
       <div className={`loader ${ready ? 'done' : ''}`} aria-hidden={ready}>
         <span>Tuning the piano</span>
+        {lookNew && <LoaderStage />}
       </div>
       )}
       <Overlay

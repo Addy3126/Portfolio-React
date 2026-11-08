@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { flowerShadeGLSL, flowerUniforms, lilyGeometry, toInstanced } from './flower'
 import { fogGLSL } from './glsl'
+import { lookNew } from '../quality'
 import { color, hideInReflection, shared } from './world'
 
 // Floating flowers live in a box that drifts toward the sun and wraps around.
@@ -51,6 +52,9 @@ void main(){
   // Slow tumble around a mostly-upright axis so flowers keep their shape.
   float camDist = distance(p, cameraPosition);
   float size = (0.085 + iSeed2.y * 0.085) * clamp(camDist / 6.0, 0.4, 1.0);
+#ifdef LOOK_NEW
+  size *= 1.15; // fewer of them in the new look, a little larger
+#endif
   vec3 axis = normalize(vec3(iSeed2.z - 0.5, 0.6, iSeed2.w - 0.5));
   mat3 R = rotAxis(axis, t * (0.2 + iSeed2.z * 0.45) + ph);
 
@@ -76,6 +80,12 @@ void main(){
   float dist = length(toP);
   vec3 V = toP / dist;
   vec3 col = shadeFlower(V, dist);
+#ifdef LOOK_NEW
+  // Backlit edge, so against the bright sky they read as dark flowers rimmed with light
+  // rather than specks of dust.
+  vec3 Nr = normalize(vNormalW) * (gl_FrontFacing ? 1.0 : -1.0);
+  col += cSunF * pow(1.0 - abs(dot(Nr, V)), 3.0) * pow(dot(V, uSunDir) * 0.5 + 0.5, 2.5) * 0.9;
+#endif
   gl_FragColor = vec4(applyFog(col, dist, V), 1.0);
 }
 `
@@ -104,6 +114,7 @@ export default function Petals({ count }) {
         vertexShader: vertex,
         fragmentShader: fragment,
         side: THREE.DoubleSide,
+        defines: lookNew ? { LOOK_NEW: '' } : {},
         uniforms: {
           ...shared,
           ...flowerUniforms(color),

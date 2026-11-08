@@ -1,8 +1,9 @@
 import * as THREE from 'three/webgpu'
-import { Fn, attribute, cameraPosition, float, length, max, mix, normalWorld, normalize, positionWorld, smoothstep, texture, uv, vec3 } from 'three/tsl'
+import { Fn, attribute, cameraPosition, dot, float, length, max, mix, normalWorld, normalize, positionWorld, pow, smoothstep, texture, uv, vec3 } from 'three/tsl'
 import { ROCK, setScanMaterialFactory } from '../scene/scans'
 import { color } from '../scene/world'
-import { vnoise } from './tsl'
+import { u, vnoise } from './tsl'
+import { lookNew } from '../quality'
 
 // The scanned rocks' material on the WebGPU path, matching scene/scans.js on WebGL: the
 // scan's maps, baked occlusion (vertex colour), moss on upward faces, a wet band at the
@@ -37,6 +38,17 @@ function gpuMaterial(maps) {
   // Dry rock stays matt (glossy texels glinted like flakes against the bright sky).
   m.roughnessNode = mix(max(texture(maps.orm, uv()).g, 0.7), float(0.22), wet)
   m.metalnessNode = float(0.0)
+  if (lookNew) {
+    // Rim light: silhouette edges facing the low sun catch it, so the rocks keep their form
+    // against the bright water instead of reading as black masses.
+    m.emissiveNode = Fn(() => {
+      const V = normalize(W.sub(cameraPosition))
+      const N = normalize(normalWorld)
+      const edge = pow(float(1.0).sub(max(dot(N, V.negate()), 0.0)), 3.0)
+      const toward = pow(dot(V, u.sunDir).mul(0.5).add(0.5), 2.0)
+      return c('#f5c8d0').mul(edge.mul(toward).mul(ROCK.rim))
+    })()
+  }
   return m
 }
 

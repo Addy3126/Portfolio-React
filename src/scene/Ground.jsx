@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
+import { lookNew } from '../quality'
 import { fogGLSL, noiseGLSL, shadowGLSL, shoreGLSL, swashGLSL, rippleGLSL } from './glsl'
 import { surfaceUniforms } from './surfaces'
 import { cullHidden } from './visibility'
@@ -157,7 +158,7 @@ export default function Ground() {
           cFrost: { value: color(palette.frost) },
           cSand: { value: color('#a49ad0') },
           cWet: { value: color('#3c3f8c') },
-          cCarpet: { value: color('#8a82cf') },
+          cCarpet: { value: color('#8a82cf').multiplyScalar(lookNew ? 0.84 : 1) }, // (darker far grass in the new look)
           cRockG: { value: color('#3a3558') },
           cFoam: { value: color('#e4dcff') },
           cSkyRefl: { value: color('#5a4f9e') },

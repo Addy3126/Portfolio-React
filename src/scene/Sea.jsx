@@ -4,7 +4,8 @@ import * as THREE from 'three'
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js'
 import { fogGLSL, noiseGLSL, shoreGLSL, swashGLSL } from './glsl'
 import { surfaceUniforms } from './surfaces'
-import { sunLanesGLSL } from './sunLanes'
+import { sunLanesGLSL, towerFoamGLSL } from './sunLanes'
+import { lookNew } from '../quality'
 import { color, hideInReflection, neverReflected, palette, shared } from './world'
 
 const SEA_LEVEL = -0.04
@@ -69,6 +70,7 @@ ${fogGLSL}
 ${shoreGLSL}
 ${swashGLSL}
 ${sunLanesGLSL}
+${towerFoamGLSL}
 
 // Slope of one travelling sine wave (deep-water dispersion).
 vec2 waveSlope(vec2 p, vec2 dir, float len, float amp, float t){
@@ -162,6 +164,17 @@ void main(){
   // Shore swash foam (shared with the sand shader so they meet seamlessly).
   vec4 sw = swash(p, landDist(p), t);
   col = mix(col, foamShadeAt(cFoam, V, vWorld.xz, sw.y), sw.y * 0.92);
+#ifdef LOOK_NEW
+  // Foam hugging the towers where they stand in the water, broken up and breathing with
+  // the swell.
+  float tf = towerFoam(p);
+  if (tf > 0.0) {
+    // A thin bright line where the water meets the wall, then patches drifting outward.
+    float n = vnoise(p * 2.2 + vec2(t * 0.4, -t * 0.3)) * 0.65 + vnoise(p * 7.0 - t * 0.6) * 0.35;
+    float fa = max(smoothstep(0.85, 1.0, tf) * (0.65 + 0.2 * sin(t * 1.4 + p.x * 0.7 + p.y * 0.5)), tf * smoothstep(0.42, 0.78, n));
+    col = mix(col, foamShadeAt(cFoam, V, p, fa), fa * 0.9);
+  }
+#endif
 
   gl_FragColor = vec4(applyFog(col, dist, V), 1.0);
 }
@@ -232,7 +245,7 @@ export default function Sea({ reflection = 0, reflectAll = false }) {
     let m
     if (scale > 0) {
       m = new Reflector(geometry, { textureWidth: 512, textureHeight: 256, shader: SeaShader, multisample: 0, clipBias: 0.002 })
-      m.material.defines = { USE_REFLECTION: '' }
+      m.material.defines = { USE_REFLECTION: '', ...(lookNew ? { LOOK_NEW: '' } : {}) }
       // Skip grass and flowers while rendering the mirrored view.
       const render = m.onBeforeRender
       m.onBeforeRender = function (...args) {
@@ -245,7 +258,7 @@ export default function Sea({ reflection = 0, reflectAll = false }) {
     } else {
       m = new THREE.Mesh(
         geometry,
-        new THREE.ShaderMaterial({ vertexShader: vertex, fragmentShader: fragment, uniforms: { ...SeaShader.uniforms, textureMatrix: { value: new THREE.Matrix4() } } }),
+        new THREE.ShaderMaterial({ vertexShader: vertex, fragmentShader: fragment, defines: lookNew ? { LOOK_NEW: '' } : {}, uniforms: { ...SeaShader.uniforms, textureMatrix: { value: new THREE.Matrix4() } } }),
       )
     }
     linkUniforms(m.material)

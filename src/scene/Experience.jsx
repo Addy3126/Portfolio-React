@@ -43,7 +43,7 @@ export default function Experience({ hovered, selected, onHover, onSelect, onRea
       className="scene"
       frameloop={debug.fps === 0 ? 'always' : 'demand'}
       dpr={dprFor(q, scale)}
-      shadows={rockShadowSize > 0}
+      shadows={{ enabled: rockShadowSize > 0, type: THREE.PCFShadowMap }} // (three r186 has no PCFSoftShadowMap, R3F's choice for shadows={true})
       camera={{ fov: 42, near: 0.1, far: 3000, position: [0, 1, 9] }}
       gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }}
       onCreated={({ scene, camera, raycaster }) => {

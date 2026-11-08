@@ -1,5 +1,7 @@
 import * as THREE from 'three'
 import { track } from '../textureReady'
+import { lookNew } from '../quality'
+import { color, shared } from './world'
 
 // Photo-scanned models (CC0, Poly Haven), simplified and packed by tools/simplify-scans.mjs:
 // quantized geometry in public/models/<name>.bin (with ambient occlusion baked per vertex
@@ -77,6 +79,7 @@ export const ROCK = {
   wet: 0.42, // albedo multiplier in the wet band at the waterline
   wetTop: 0.55, // metres above the sea the wet band reaches
   detailScale: 7, // the scan's own albedo, re-sampled finer for close views
+  rim: 0.32, // new look: sunlit rim on edges facing the sun
 }
 
 // The WebGL material: standard PBR with the scan's maps, plus moss on upward faces, a wet
@@ -148,6 +151,20 @@ function glMaterial(maps) {
       )
       // Dry rock stays matt (glossy texels glinted like flakes against the bright sky).
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(max(roughnessFactor, 0.7), 0.22, scanWet);')
+    if (lookNew) {
+      // Rim light (as gpu/scanMaterial.js): silhouette edges facing the low sun catch it.
+      shader.uniforms.uSunDir = shared.uSunDir
+      shader.fragmentShader = shader.fragmentShader.replace('uniform vec3 uMoss;', 'uniform vec3 uMoss;\nuniform vec3 uSunDir;').replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        {
+          vec3 Vr = normalize(vScanW - cameraPosition);
+          float edge = pow(1.0 - max(dot(normalize(vScanN), -Vr), 0.0), 3.0);
+          float toward = pow(dot(Vr, uSunDir) * 0.5 + 0.5, 2.0);
+          totalEmissiveRadiance += vec3(${color('#f5c8d0').toArray().map((v) => v.toFixed(4)).join(', ')}) * edge * toward * ${ROCK.rim.toFixed(2)};
+        }`,
+      )
+    }
   }
   return m
 }

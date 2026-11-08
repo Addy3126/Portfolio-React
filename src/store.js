@@ -9,3 +9,11 @@ export const motion = {
   pointerInside: false,
   playing: false, // at the piano (play mode)
 }
+
+// What the loading screen is waiting for (set by the scene's startup, shown under the title).
+export const loading = { stage: 'Loading the field', listeners: new Set() }
+export function setLoadingStage(stage) {
+  if (loading.stage === stage) return
+  loading.stage = stage
+  loading.listeners.forEach((fn) => fn(stage))
+}

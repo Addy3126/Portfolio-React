@@ -1,9 +1,9 @@
 import './threeLog'
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { calibrate, debug, saveCalibration, settingsFor } from '../quality'
+import { calibrate, debug, markCalibrationStale, saveCalibration, settingsFor } from '../quality'
 import { decide } from './calibration'
-import { motion } from '../store'
+import { motion, setLoadingStage } from '../store'
 import { texturesReady } from '../textureReady'
 
 // Live numbers for the ?hud=1 readout (and tests): frame interval, main-thread time per
@@ -31,9 +31,11 @@ const median = (arr) => {
 // 3. Settle: the result is fixed for the visit (nothing switches while browsing) and
 //    remembered for the next one.
 const TOUR = [1, 2, 3, 2.5, 1.5, 0.5, 0]
-const MEASURE = [0, 1, 2, 3]
-const SETTLE = 3 // frames after moving before measuring (level of detail, uploads)
-const SAMPLES = 8
+// Measured: the stops and the two long flights (landing to About crosses the whole field,
+// Projects to Contact the sea at its widest).
+const MEASURE = [0, 0.5, 1, 2, 2.5, 3]
+const SETTLE = 2 // frames after moving before measuring (level of detail, uploads)
+const SAMPLES = 6
 const MAX_TIME = 20000 // ms: make no further changes after this
 const HARD_STOP = 30000 // ms: stop measuring, keep what we have
 const minScale = (tierName) => (Math.max(1, Math.min(window.devicePixelRatio, settingsFor(tierName).dpr[1])) > 1.2 ? 0.7 : 0.85)
@@ -41,11 +43,12 @@ const minScale = (tierName) => (Math.max(1, Math.min(window.devicePixelRatio, se
 export function Startup({ tier, scale, onQuality, onDone }) {
   const gl = useThree((s) => s.gl)
   const st = useRef(null)
-  if (!st.current) st.current = { phase: 'wait', mounted: 0, live: true, i: 0, f: 0, m: 0, last: 0, tier, scale, saved: 0, t0: 0, rows: [], probed: null, failed: new Set(), log: [] }
+  if (!st.current) st.current = { phase: 'wait', mounted: 0, live: true, i: 0, f: 0, m: 0, last: 0, tier, scale, saved: 0, t0: 0, rows: [], probed: null, failed: new Set(), log: [], times: {}, phaseT: 0 }
 
   useEffect(() => {
     const s = st.current
     s.live = true
+    calibrated.done = false // (again, if the WebGL scene takes over from a failed WebGPU one)
     return () => {
       s.live = false
       perf.sink = null
@@ -60,14 +63,22 @@ export function Startup({ tier, scale, onQuality, onDone }) {
     if (++s.mounted === 3) texturesReady().then(() => s.live && s.phase === 'wait' && Object.assign(s, { phase: 'grace', i: 2 }))
     if (s.phase === 'wait' || s.phase === 'done') return
 
-    const begin = (phase) => Object.assign(s, { phase, i: 0, f: 0, m: 0, rows: [], last: 0 })
+    const begin = (phase) => {
+      setLoadingStage(phase === 'warm' ? 'Warming up' : 'Finding the right settings for this screen')
+      // Time per phase, for the ?hud=1 readout (where a slow first visit spends its seconds).
+      if (s.phaseT) s.times[s.phase] = (s.times[s.phase] || 0) + (now - s.phaseT)
+      s.phaseT = now
+      Object.assign(s, { phase, i: 0, f: 0, m: 0, rows: [], last: 0 })
+    }
     const finish = () => {
       motion.progress = s.saved
       if (calibrate) saveCalibration(s.tier, s.scale)
       if (gl.backend && !debug.hud) gl.backend.trackTimestamp = false // no query cost while browsing
       perf.sink = null
+      if (s.phaseT) s.times[s.phase] = (s.times[s.phase] || 0) + (now - s.phaseT)
       s.phase = 'done'
-      window.__calibration = { tier: s.tier, scale: s.scale, ms: Math.round(now - s.t0), steps: s.log }
+      calibrated.done = true
+      window.__calibration = { tier: s.tier, scale: s.scale, ms: Math.round(now - s.t0), steps: s.log, times: Object.fromEntries(Object.entries(s.times).map(([k, v]) => [k, Math.round(v)])) }
       onDone()
     }
     const change = (tierName, sc) => {
@@ -130,15 +141,35 @@ export function Startup({ tier, scale, onQuality, onDone }) {
   return null
 }
 
+// After settling, watch in 10-second windows (visible tab only) for a sustained run of late
+// frames: two windows in a row with over a third of frames late flags the remembered result
+// for re-testing on the next visit (nothing changes now).
+function watchStale(s, dt, now) {
+  if (!calibrated.done || document.hidden || dt > 1000) return
+  if (!s.win) s.win = now
+  s.n++
+  if (dt > (1000 / pace.fps) * 1.5) s.slow++
+  if (now - s.win < 10000) return
+  s.bad = s.slow > s.n / 3 ? s.bad + 1 : 0
+  if (s.bad === 2) markCalibrationStale()
+  s.win = now
+  s.n = s.slow = 0
+}
+export const calibrated = { done: false }
+
 // Per-frame numbers: main-thread time (first to last frame callback, which includes the
 // render calls), the interval between frames, and GPU time from timestamp queries. Also the
 // render counts for ?stats=1 (window.__stats).
 export function Probe() {
-  const st = useRef({ start: 0, last: 0, since: 0, pending: false })
+  const st = useRef({ start: 0, last: 0, since: 0, pending: false, win: 0, slow: 0, n: 0, bad: 0 })
   useFrame(({ gl }) => {
     const s = st.current
     s.start = performance.now()
-    if (s.last) keep(perf.intervals, s.start - s.last)
+    if (s.last) {
+      const dt = s.start - s.last
+      keep(perf.intervals, dt)
+      watchStale(s, dt, s.start)
+    }
     s.last = s.start
     gl.info.autoReset = false
     gl.info.reset()
@@ -174,11 +205,10 @@ export function Probe() {
 export const pace = { fps: 60 }
 // Highest rate the scene renders at automatically.
 const MAX_FPS = 75
-const RATES = [48, 50, 60, 72, 75, 90, 100, 120, 144, 165, 240]
 
 // Drives the on-demand render loop. With no fixed rate (the default) it renders on every
 // k-th display refresh, k picked so the rate is at most MAX_FPS: 60 Hz and 120 Hz screens
-// get 60 fps, 144 Hz gets 72. An even divisor of the refresh keeps every frame on screen
+// get 60 fps, 144 Hz gets 72, 200 Hz gets 66.7. An even divisor of the refresh keeps every frame on screen
 // for the same time; a rate that doesn't divide it (45 fps on a 60 Hz screen) alternates
 // one- and two-refresh frames, which reads as judder while the camera moves.
 // `fps` > 0 pins a rate instead (?fps=), timed against the clock.
@@ -203,28 +233,38 @@ export function FrameLimiter({ fps }) {
       raf = requestAnimationFrame(tick)
       return () => cancelAnimationFrame(raf)
     }
-    // First measure the display's refresh from the gaps between animation frames, with
-    // nothing rendering (the loading screen is still up), over half a second: a low
-    // percentile, so frames held up by loading work don't count, snapped to a standard rate.
+    // The display's refresh, from the gaps between animation frames (they come every refresh
+    // whether or not we render): first over half a second with nothing rendering (the loading
+    // screen is up), then kept up to date for the whole visit, so a reading spoiled by loading
+    // work, or a window moved to another screen, corrects itself. A low percentile, so frames
+    // held up by other work don't count; no snapping to a list (screens run at 200 Hz, 100 Hz…).
     const gaps = []
     let last = 0
     let every = 1
     let n = 0
+    let refresh = 0
+    let ticks = 0
+    const estimate = () => {
+      const sorted = [...gaps].sort((a, b) => a - b)
+      const hz = Math.round(1000 / sorted[Math.floor(sorted.length * 0.1)])
+      if (Math.abs(hz - refresh) <= Math.max(2, refresh * 0.03)) return // same screen, noise
+      refresh = hz
+      every = Math.max(1, Math.ceil(refresh / MAX_FPS - 0.01))
+      pace.fps = refresh / every
+      window.__pace = { refresh, every, fps: Math.round(pace.fps * 10) / 10 }
+    }
     const tick = (t) => {
       raf = requestAnimationFrame(tick)
-      if (gaps.length < 30) {
-        if (last) gaps.push(t - last)
-        last = t
-        if (gaps.length === 30) {
-          const sorted = [...gaps].sort((a, b) => a - b)
-          const hz = 1000 / sorted[Math.floor(sorted.length * 0.2)]
-          const refresh = RATES.reduce((a, b) => (Math.abs(b - hz) < Math.abs(a - hz) ? b : a))
-          every = Math.max(1, Math.ceil(refresh / MAX_FPS - 0.01))
-          pace.fps = refresh / every
-          window.__pace = { refresh, every, fps: pace.fps }
-        }
+      if (last && t - last < 100) {
+        gaps.push(t - last)
+        if (gaps.length > 240) gaps.shift()
+      }
+      last = t
+      if (!refresh) {
+        if (gaps.length >= 30) estimate()
         return
       }
+      if (++ticks % 120 === 0) estimate()
       if (++n % every === 0) invalidate()
     }
     raf = requestAnimationFrame(tick)

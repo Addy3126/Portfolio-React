@@ -53,6 +53,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .loader span { font: 400 22px/1 var(--font-display); letter-spacing: 0.2em; color: var(--lavender); animation: breathe 2.4s ease-in-out infinite; }
 .loader.done { opacity: 0; visibility: hidden; }
 @keyframes breathe { 50% { opacity: 0.35; } }
+.loader { align-content: center; row-gap: 18px; }
+.loader-stage { position: relative; padding-bottom: 14px; font: 500 11px/1 var(--font-body); letter-spacing: 0.24em; text-transform: uppercase; color: var(--ink-soft); opacity: 0.8; }
+.loader-stage::after { content: ''; position: absolute; left: 50%; bottom: 0; width: 64px; height: 1px; translate: -50% 0; background: linear-gradient(90deg, transparent, var(--glow), transparent); animation: sweep 2.4s ease-in-out infinite; }
+@keyframes sweep { 0%, 100% { width: 28px; opacity: 0.3; } 50% { width: 140px; opacity: 0.9; } }
+
+/* New look: a soft dark band behind the header so it stays readable over bright clouds. */
+.look-new .topbar::before { content: ''; position: absolute; inset: 0 0 -40px; z-index: -1; pointer-events: none; background: linear-gradient(rgba(11, 14, 45, 0.5), rgba(11, 14, 45, 0)); }
 
 /* Top bar */
 .topbar {
@@ -77,6 +84,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   transition: color 0.2s, border-color 0.2s;
 }
 .topbar nav button:hover { color: var(--ink); border-color: var(--line); }
+.topbar nav .sound { margin-left: 10px; font-size: 12px; letter-spacing: 0.06em; }
+.topbar nav .sound[aria-pressed='true'] { color: var(--glow); border-color: var(--line); }
+.topbar nav .sound span:first-child { font-size: 10px; margin-right: 2px; }
 .status { margin: 0 0 0 auto; display: flex; gap: 28px; font-size: 12px; }
 .status div { display: flex; flex-direction: column; }
 .status dt { color: var(--ink-soft); letter-spacing: 0.08em; text-transform: uppercase; font-size: 10px; }
@@ -199,6 +209,8 @@ kbd { font: 600 10px/1 inherit; padding: 3px 5px; border: 1px solid var(--line);
   .status { display: none; }
   .topbar nav { margin-left: auto; }
   .topbar nav button { padding: 6px 8px; font-size: 13px; }
+  .topbar nav .sound { margin-left: 2px; }
+  .topbar nav .sound .label { display: none; }
   .landing { left: 16px; right: 16px; top: 15vh; max-width: none; text-align: center; }
   .about { left: 16px; right: 16px; width: auto; top: auto; bottom: 6vh; padding: 20px; }
   .projects { left: 16px; right: 16px; top: auto; bottom: 4vh; flex-direction: column; gap: 12px; max-height: 78vh; overflow-y: auto; }
@@ -219,6 +231,7 @@ kbd { font: 600 10px/1 inherit; padding: 3px 5px; border: 1px solid var(--line);
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .loader-stage::after { animation: none; }
   .scroll-cue, .loader span { animation: none; }
   .landing h1, .landing .tagline { transition: none; }
 }
