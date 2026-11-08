@@ -4,6 +4,7 @@ import Overlay from './overlay/Overlay'
 import PianoBar from './overlay/PianoBar'
 import { enterPlay, exitPlay } from './piano/engine'
 import usePianoKeyboard from './piano/usePianoKeyboard'
+import { uiSound } from './audio/ambient'
 import { SECTIONS, loading, motion } from './store'
 import { debug, gpuLabel, hasWebGL, isWindows, lookNew, qualitySource, reducedMotion, refineGuess, tier } from './quality'
 
@@ -112,7 +113,7 @@ export default function App() {
   const Experience = renderer === 'webgpu' ? ExperienceGPU : ExperienceGL
 
   useEffect(() => {
-    const l = new Lenis({ lerp: reducedMotion ? 1 : 0.075, wheelMultiplier: 0.9 })
+    const l = new Lenis({ lerp: reducedMotion ? 1 : 0.075, wheelMultiplier: 0.8 })
     lenis.current = l
     const onScroll = ({ scroll, limit }) => {
       motion.progress = limit > 0 ? (scroll / limit) * (SECTIONS.length - 1) : 0
@@ -145,7 +146,11 @@ export default function App() {
 
   useEffect(() => {
     document.body.style.cursor = hovered !== null ? 'pointer' : ''
+    if (hovered !== null && hovered !== undefined) uiSound('hover')
   }, [hovered])
+  useEffect(() => {
+    if (selected !== null && selected !== undefined) uiSound('select')
+  }, [selected])
   useEffect(() => void document.documentElement.classList.toggle('look-new', lookNew), [])
 
   const goTo = useCallback((i) => {
@@ -190,7 +195,9 @@ export default function App() {
         onPlay={webgl ? startPlaying : null}
       />
       {playing && <PianoBar onExit={stopPlaying} />}
-      <div className="scroll-space" style={{ height: `${100 + (SECTIONS.length - 1) * 130}vh` }} />
+      {/* Scroll distance: 2.4 screens per section, so a small flick moves within a section
+          rather than skipping to the next. */}
+      <div className="scroll-space" style={{ height: `${100 + (SECTIONS.length - 1) * 240}vh` }} />
     </>
   )
 }

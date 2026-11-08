@@ -10,6 +10,7 @@ import { seeded } from './ruins/noise3'
 import { cullHidden } from './visibility'
 import { color, shared } from './world'
 import { lookNew } from '../quality'
+import { motion } from '../store'
 
 export { TOWERS }
 
@@ -98,7 +99,11 @@ function windowGeometry(windows) {
 const _inv = new THREE.Matrix4()
 const _ray = new THREE.Ray()
 const _hit = new THREE.Vector3()
+// Towers answer the pointer only while the Projects panel is showing (it fades in within
+// about a third of a section of its stop), so a stray hover elsewhere does nothing.
+export const inProjects = () => Math.abs(motion.progress - 2) < 0.3
 function boxRaycast(raycaster, intersects) {
+  if (!inProjects()) return
   const g = this.geometry
   if (!g.boundingBox) g.computeBoundingBox()
   _inv.copy(this.matrixWorld).invert()
@@ -170,6 +175,13 @@ export default function Ruins({ hovered, selected, onHover, onSelect, mats = mat
   }, [])
   // The smaller ruins on the left stand in the shallows, sunk a little so they read as rooted.
   const plateau = useMemo(() => PLATEAU_BUILDINGS.map((b) => ({ spec: b, baseY: -1 })), [])
+
+  // Leaving the Projects section clears a hover or selection left behind.
+  useFrame(() => {
+    if (inProjects()) return
+    if (hovered !== null && hovered !== undefined) onHover(null)
+    if (selected !== null && selected !== undefined) onSelect(null)
+  })
 
   // The ruins that aren't projects never change: merged per material, one set for each side
   // of the bay (so a side off screen is still skipped), instead of a draw call per building
