@@ -58,7 +58,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .loader-stage::after { content: ''; position: absolute; left: 50%; bottom: 0; width: 64px; height: 1px; translate: -50% 0; background: linear-gradient(90deg, transparent, var(--glow), transparent); animation: sweep 2.4s ease-in-out infinite; }
 @keyframes sweep { 0%, 100% { width: 28px; opacity: 0.3; } 50% { width: 140px; opacity: 0.9; } }
 
-/* New look: a soft dark band behind the header so it stays readable over bright clouds. */
+/* New look: a soft dark band behind the header so it stays readable over the bright sky. */
 .look-new .topbar::before { content: ''; position: absolute; inset: 0 0 -40px; z-index: -1; pointer-events: none; background: linear-gradient(rgba(11, 14, 45, 0.5), rgba(11, 14, 45, 0)); }
 
 /* Top bar */

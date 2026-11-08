@@ -56,8 +56,6 @@ export const palette = {
   mid: '#3a2f7a',
   horizon: '#d9a6c8',
   glow: '#f5c8d0',
-  cloud: '#2c2768',
-  cloudLit: '#a585c0',
   aurora1: '#4f5dff',
   aurora2: '#a37bff',
   seaNear: '#2a35a8',

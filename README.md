@@ -36,7 +36,7 @@ All text lives in `src/content.js`. Each project in `projects` is attached to on
 
 | Path | What it is |
 |---|---|
-| `src/scene/Sky.jsx` | Sky gradient, sun, clouds and stars in one shader; also bakes the reflection map |
+| `src/scene/Sky.jsx` | Sky gradient, sun and stars; also bakes the reflection map |
 | `src/scene/Sea.jsx`, `Ground.jsx` | Water with sun glints; ground with a wavy shoreline |
 | `src/scene/Grass.jsx` | Instanced frost grass with wind |
 | `src/scene/Petals.jsx` | GPU-animated petals drifting toward the sun |
