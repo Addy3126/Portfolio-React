@@ -61,11 +61,7 @@ export default function Overlay({ goTo, hovered, selected, onHover, onSelect, re
   const time = useLocalTime(site.timeZone)
   const [copied, setCopied] = useState(false)
   const touch = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
-  // On touch screens only a tap opens details; a hover-driven layout shift would move
-  // the list under the finger before the tap lands.
   const active = touch ? selected : selected ?? hovered
-
-  const project = active !== null && active !== undefined ? projects[active] : null
 
   const copyEmail = async () => {
     try {
@@ -133,7 +129,7 @@ export default function Overlay({ goTo, hovered, selected, onHover, onSelect, re
       <section ref={(el) => (panels.current[2] = el)} className="panel projects" aria-labelledby="projects-h">
         <div className="project-list">
           <h2 id="projects-h">Projects</h2>
-          <p className="hint">{touch ? 'Tap a project to see details.' : 'Hover a lit tower, or pick one here.'}</p>
+          <p className="hint">{touch ? 'Tap a lit tower, or a project here, to walk up to it.' : 'Click a lit tower, or a project here, to walk up to it.'}</p>
           <ol>
             {projects.map((p, i) => (
               <li key={p.name}>
@@ -144,34 +140,14 @@ export default function Overlay({ goTo, hovered, selected, onHover, onSelect, re
                   onMouseLeave={() => onHover(null)}
                   onFocus={() => onHover(i)}
                   onBlur={() => onHover(null)}
-                  onClick={() => onSelect(selected === i ? null : i)}
+                  onClick={() => onSelect(i)}
                 >
-                  {p.name}
+                  <span className="num">{String(i + 1).padStart(2, '0')}</span> {p.name}
                 </button>
               </li>
             ))}
           </ol>
         </div>
-        <article className={`project-detail ${project ? 'show' : ''}`} aria-live="polite">
-          {project && (
-            <>
-              <h3>{project.name}</h3>
-              <p>{project.summary}</p>
-              <ul className="chips">
-                {project.stack.map((s) => (
-                  <li key={s}>{s}</li>
-                ))}
-              </ul>
-              {project.link ? (
-                <a href={project.link} target="_blank" rel="noreferrer">
-                  {project.linkLabel || 'View project'}
-                </a>
-              ) : (
-                project.note && <p className="note">{project.note}</p>
-              )}
-            </>
-          )}
-        </article>
       </section>
 
       <section ref={(el) => (panels.current[3] = el)} className="panel contact" aria-labelledby="contact-h">

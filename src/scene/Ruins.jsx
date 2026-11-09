@@ -10,7 +10,9 @@ import { seeded } from './ruins/noise3'
 import { cullHidden } from './visibility'
 import { color, shared } from './world'
 import { lookNew } from '../quality'
-import { motion } from '../store'
+import { focus, isVisited } from '../focus'
+import Facade from './Facade'
+import { inProjects } from './projectsGate'
 
 export { TOWERS }
 
@@ -35,14 +37,16 @@ void main(){
 `
 const windowFragment = /* glsl */ `
 uniform vec3 uColor;
+uniform float uShare;
 varying vec3 vWorld;
 varying float vWarm;
 ${fogGLSL}
 void main(){
   vec3 toP = vWorld - cameraPosition;
   float dist = length(toP);
-  // New look: some windows lit warm (lived in), so the project towers stand apart.
-  vec3 col = max(uColor, WARM * vWarm);
+  // New look: some windows lit warm (lived in), so the project towers stand apart; more of
+  // them on towers this visitor has walked up to.
+  vec3 col = max(uColor, WARM * step(vWarm, uShare));
   gl_FragColor = vec4(applyFog(col, dist, toP / dist), 1.0);
 }
 `
@@ -54,9 +58,10 @@ function windowMaterial() {
   const m = new THREE.ShaderMaterial({
     vertexShader: windowVertex,
     fragmentShader: windowFragment.replace('WARM', `vec3(${WARM.r}, ${WARM.g}, ${WARM.b})`),
-    uniforms: { ...shared, uColor: { value: DIM.clone() } },
+    uniforms: { ...shared, uColor: { value: DIM.clone() }, uShare: { value: 0 } },
   })
   m.userData.color = m.uniforms.uColor.value
+  m.userData.share = m.uniforms.uShare
   return m
 }
 export const DIM = color('#1c2350')
@@ -85,10 +90,11 @@ function windowGeometry(windows) {
   const out = new THREE.BufferGeometry()
   out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
   out.setIndex(index)
-  // Per window (4 vertices each): lit warm or not, the same on every visit.
+  // Per window (4 vertices each): a fixed random rank; windows ranked under the tower's
+  // share are lit warm (the same ones on every visit).
   const warm = new Float32Array(pos.length / 3)
   const rand = seeded(77)
-  for (let i = 0; i < warm.length; i += 4) warm.fill(lookNew && rand() < 0.25 ? 1 : 0, i, i + 4)
+  for (let i = 0; i < warm.length; i += 4) warm.fill(rand() + 1e-3, i, i + 4)
   out.setAttribute('aWarm', new THREE.Float32BufferAttribute(warm, 1))
   return out
 }
@@ -99,11 +105,11 @@ function windowGeometry(windows) {
 const _inv = new THREE.Matrix4()
 const _ray = new THREE.Ray()
 const _hit = new THREE.Vector3()
-// Towers answer the pointer only while the Projects panel is showing (it fades in within
-// about a third of a section of its stop), so a stray hover elsewhere does nothing.
-export const inProjects = () => Math.abs(motion.progress - 2) < 0.3
+// Towers answer the pointer only in the Projects view (projectsGate.js), and not while the
+// camera is at a tower (its opening and bright window take the clicks then).
+export { inProjects }
 function boxRaycast(raycaster, intersects) {
-  if (!inProjects()) return
+  if (!inProjects() || focus.project !== null) return
   const g = this.geometry
   if (!g.boundingBox) g.computeBoundingBox()
   _inv.copy(this.matrixWorld).invert()
@@ -114,7 +120,7 @@ function boxRaycast(raycaster, intersects) {
   if (distance >= raycaster.near && distance <= raycaster.far) intersects.push({ distance, point: _hit.clone(), object: this })
 }
 
-function Building({ spec, index, baseY = 0, state, onHover, onSelect, mats, makeWindow }) {
+function Building({ spec, index, baseY = 0, state, hovered, onHover, onSelect, mats, makeWindow }) {
   const built = useMemo(() => {
     const b = buildTower(spec, seeded(1000 + index * 37))
     // Drop faces no camera can see (back walls, undersides, anything under the sea).
@@ -132,10 +138,16 @@ function Building({ spec, index, baseY = 0, state, onHover, onSelect, mats, make
   const windowMat = useMemo(() => (interactive ? makeWindow() : null), [interactive, makeWindow])
   const windowGeo = useMemo(() => (interactive ? windowGeometry(built.windows) : null), [interactive, built])
 
+  // A project tower's front: where it stands, and the top of it (for its name label).
+  const origin = useMemo(() => new THREE.Vector3(spec.x, baseY - (spec.sunk || 0), spec.z), [spec, baseY])
+  const towerTop = useMemo(() => new THREE.Vector3(spec.x, baseY + built.height, spec.z), [spec, baseY, built])
+
   const level = useRef(0)
   useFrame((_, dt) => {
     if (!windowMat) return
-    const target = state === 'selected' ? 1 : state === 'hover' ? 0.6 : 0
+    windowMat.userData.share.value = lookNew ? (isVisited(spec.project) ? 0.55 : 0.25) : 0
+    // At the tower its spare windows stay dark glass beside the lit ones.
+    const target = focus.project === spec.project ? 0 : state === 'selected' ? 1 : state === 'hover' ? 0.6 : 0
     level.current += (target - level.current) * Math.min(1, dt * 5)
     const l = level.current
     windowMat.userData.color.copy(DIM).lerp(l > 0.6 ? LIT : HOVER, Math.min(1, l / (l > 0.6 ? 1 : 0.6)))
@@ -160,6 +172,7 @@ function Building({ spec, index, baseY = 0, state, onHover, onSelect, mats, make
     <group position={[spec.x, baseY - (spec.sunk || 0), spec.z]} rotation={[tx, 0, tz]}>
       <mesh geometry={built.geometry} material={mats[spec.style] || mats.concrete} {...handlers} {...(interactive && { raycast: boxRaycast })} />
       {windowGeo && <mesh geometry={windowGeo} material={windowMat} />}
+      {built.facade && <Facade project={spec.project} fc={built.facade} origin={origin} towerTop={towerTop} hovered={hovered} />}
     </group>
   )
 }
@@ -212,6 +225,7 @@ export default function Ruins({ hovered, selected, onHover, onSelect, mats = mat
               spec={t}
               baseY={0}
               state={selected === t.project ? 'selected' : hovered === t.project ? 'hover' : 'idle'}
+              hovered={hovered}
               onHover={onHover}
               onSelect={onSelect}
               mats={mats}

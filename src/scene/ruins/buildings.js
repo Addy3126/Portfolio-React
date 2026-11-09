@@ -12,8 +12,16 @@ const STYLES = {
   stone: { floor: 3.6, winH: 0.5, sills: true, lintel: true, balconies: false },
 }
 
+// The broken-out opening in a project tower's front face (spec.project set): the middle
+// three columns (all of them on a three-column face) over the third and fourth floors. Its
+// wall is knocked through, the floor slab between is broken back, and a preview of the
+// project shows in the gap (src/scene/Facade.jsx).
+export const OPENING_FLOORS = [2, 3]
+export const OPENING_DEPTH = 0.38 // the preview screen's depth behind the face
+
 // Builds one building as a single merged geometry (position, normal, aKind) plus the
-// centres of its front-facing windows (for the lit project towers).
+// centres of its front-facing windows (for the lit project towers) and, for project towers,
+// the front face's window grid and opening (`facade`, in building space).
 export function buildTower(spec, rand) {
   const st = STYLES[spec.style] || STYLES.concrete
   const { w, d } = spec
@@ -60,6 +68,16 @@ export function buildTower(spec, rand) {
   })
   const minTop = Math.min(...tops.flat())
 
+  // Project towers: which front columns and floors the opening spans.
+  const frontCols = tops[0].length
+  const open = spec.project !== undefined && {
+    c0: frontCols >= 5 ? 1 : 0,
+    c1: frontCols >= 5 ? frontCols - 2 : frontCols - 1,
+    f0: OPENING_FLOORS[0],
+    f1: OPENING_FLOORS[1],
+  }
+  const skip = () => {}
+
   sides.forEach((side, si) => {
     const cols = tops[si].length
     const cw = side.len / cols
@@ -71,17 +89,27 @@ export function buildTower(spec, rand) {
         const y0 = f * fh
         const wh = fh * st.winH
         const sill = y0 + fh * 0.3
-        if (f > 0 && rand() < 0.035) continue // a missing panel, open to the interior
-        faceBox(side, u0 - cw / 2 + pw / 2, y0 + fh / 2, pw, fh, t, t / 2, KIND.wall)
-        faceBox(side, u0 + cw / 2 - pw / 2, y0 + fh / 2, pw, fh, t, t / 2, KIND.wall)
-        faceBox(side, u0, y0 + fh * 0.15, ww, fh * 0.3, t, t / 2, KIND.wall)
+        if (f > 0 && rand() < 0.035 && !(open && si === 0)) continue // a missing panel, open to the interior
+        // Inside the opening: no piers, sills or lintels between its windows.
+        const inOpen = open && si === 0 && c >= open.c0 && c <= open.c1 && f >= open.f0 && f <= open.f1
+        const fb = inOpen ? skip : faceBox
+        // Piers: full height, or inside the opening only the parts below and above it.
+        const pier = (u, inner) => {
+          if (!(inOpen && inner)) return faceBox(side, u, y0 + fh / 2, pw, fh, t, t / 2, KIND.wall)
+          if (f === open.f0) faceBox(side, u, y0 + fh * 0.15, pw, fh * 0.3, t, t / 2, KIND.wall)
+          const top = fh - fh * 0.3 - wh
+          if (f === open.f1) faceBox(side, u, y0 + fh - top / 2, pw, top, t, t / 2, KIND.wall)
+        }
+        pier(u0 - cw / 2 + pw / 2, open && c > open.c0)
+        pier(u0 + cw / 2 - pw / 2, open && c < open.c1)
+        ;(inOpen && f > open.f0 ? skip : faceBox)(side, u0, y0 + fh * 0.15, ww, fh * 0.3, t, t / 2, KIND.wall)
         const above = fh - fh * 0.3 - wh
-        faceBox(side, u0, sill + wh + above / 2, ww, above, t, t / 2, KIND.wall)
-        if (st.sills) faceBox(side, u0, sill - 0.04, ww + 0.2, 0.1, t + 0.16, t / 2 - 0.06, KIND.trim)
-        if (st.lintel) faceBox(side, u0, sill + wh + 0.12, ww + 0.3, 0.24, t + 0.1, t / 2 - 0.04, KIND.trim)
-        if (side.front) {
+        ;(inOpen && f < open.f1 ? skip : faceBox)(side, u0, sill + wh + above / 2, ww, above, t, t / 2, KIND.wall)
+        if (st.sills) fb(side, u0, sill - 0.04, ww + 0.2, 0.1, t + 0.16, t / 2 - 0.06, KIND.trim)
+        if (st.lintel) fb(side, u0, sill + wh + 0.12, ww + 0.3, 0.24, t + 0.1, t / 2 - 0.04, KIND.trim)
+        if (side.front && !inOpen) {
           const [x, z] = side.place(u0, t + 0.04)
-          windows.push({ x, y: sill + wh / 2, z, w: ww * 0.94, h: wh * 0.94 })
+          windows.push({ x, y: sill + wh / 2, z, w: ww * 0.94, h: wh * 0.94, col: c, floor: f })
         }
         // What's left of a window frame: a mullion and a transom, some missing or bent.
         if (!side.front && rand() < 0.45) {
@@ -89,8 +117,9 @@ export function buildTower(spec, rand) {
           faceBox(side, u0, sill + wh / 2, 0.06, wh, 0.08, t * 0.6, KIND.rebar, bent)
           if (rand() < 0.6) faceBox(side, u0, sill + wh * 0.66, ww, 0.05, 0.08, t * 0.6, KIND.rebar)
         }
-        // Balconies on the brick and concrete blocks, some cracked off at an angle.
-        if (st.balconies && f > 0 && f < tops[si][c] && rand() < 0.16) {
+        // Balconies on the brick and concrete blocks, some cracked off at an angle (none on
+        // a project tower's front, where they would hang over its windows).
+        if (st.balconies && f > 0 && f < tops[si][c] && rand() < 0.16 && !(open && si === 0)) {
           const drop = rand() < 0.3
           const out = -0.55
           faceBox(side, u0, y0 + 0.1, ww + 0.4, 0.16, 1.1, out, KIND.slab, drop ? (rand() < 0.5 ? -1 : 1) * (0.12 + rand() * 0.2) : 0)
@@ -115,7 +144,11 @@ export function buildTower(spec, rand) {
 
   // Floor slabs (protruding slightly) up to the intact part, dark core behind the openings,
   // corner columns.
-  for (let f = 1; f <= minTop + 1; f++) box(0, f * fh - 0.15, 0, w + 0.2, 0.3, d + 0.2, KIND.slab)
+  for (let f = 1; f <= minTop + 1; f++) {
+    // A slab crossing the opening is broken back from the face, behind the preview.
+    if (open && f > open.f0 && f <= open.f1) box(0, f * fh - 0.15, -0.45, w + 0.2, 0.3, d + 0.2 - 0.9, KIND.slab)
+    else box(0, f * fh - 0.15, 0, w + 0.2, 0.3, d + 0.2, KIND.slab)
+  }
   // Above the intact part, broken floors: a slab snapped at the wall and hanging from its
   // rebar, tilted down and out from the face.
   if (spec.broken) {
@@ -172,6 +205,7 @@ export function buildTower(spec, rand) {
   const climbers = 2 + Math.floor(rand() * 4)
   for (let v = 0; v < climbers; v++) {
     const si = Math.floor(rand() * 4)
+    if (open && si === 0) continue // a project tower's front stays clear for its windows
     const side = sides[si]
     const maxY = Math.min((Math.min(...tops[si]) + 1) * fh - 0.3, 3 + rand() * 9)
     const grow = (u, y, dirU, len, depth) => {
@@ -190,6 +224,7 @@ export function buildTower(spec, rand) {
   const vines = 3 + Math.floor(rand() * 3)
   for (let v = 0; v < vines; v++) {
     const si = Math.floor(rand() * 4)
+    if (open && si === 0) continue
     const side = sides[si]
     const cols = tops[si].length
     const c = Math.floor(rand() * cols)
@@ -204,12 +239,56 @@ export function buildTower(spec, rand) {
     }
   }
 
+  // The opening's broken edge: chunks of wall hanging into the gap and bent rebar.
+  let facade = null
+  if (open) {
+    const cw = w / frontCols
+    const ww = cw * 0.52
+    const wh = fh * st.winH
+    const front = sides[0]
+    const x0 = -w / 2 + (open.c0 + 0.5) * cw - ww / 2
+    const x1 = -w / 2 + (open.c1 + 0.5) * cw + ww / 2
+    const y0 = open.f0 * fh + fh * 0.3
+    const y1 = open.f1 * fh + fh * 0.3 + wh
+    const edge = (u, y, horizontal) => {
+      const s0 = 0.25 + rand() * 0.45
+      const along = horizontal ? s0 * (1.2 + rand()) : s0
+      const across = horizontal ? s0 : s0 * (1.2 + rand())
+      faceBox(front, u, y, along, across, t * (0.7 + rand() * 0.6), t / 2 + (rand() - 0.5) * 0.12, KIND.wall, (rand() - 0.5) * 0.9)
+    }
+    for (let u = x0 + 0.2; u < x1; u += 0.45 + rand() * 0.5) {
+      edge(u, y1 + 0.05 - rand() * 0.25, true)
+      edge(u + 0.2, y0 - 0.05 + rand() * 0.25, true)
+    }
+    for (let y = y0 + 0.2; y < y1; y += 0.45 + rand() * 0.5) {
+      edge(x0 - 0.05 + rand() * 0.22, y, false)
+      edge(x1 + 0.05 - rand() * 0.22, y, false)
+    }
+    for (let r = 0; r < 7; r++) {
+      const u = x0 + rand() * (x1 - x0)
+      const len = 0.35 + rand() * 0.6
+      const top = rand() < 0.6
+      const [x, z] = front.place(u, t / 2)
+      box(x, top ? y1 - len / 2 : y0 + len / 2, z, 0.04, len, 0.04, KIND.rebar, (rand() - 0.5) * 0.7, 0, (rand() - 0.5) * 0.9)
+    }
+    facade = {
+      cols: Array.from({ length: frontCols }, (_, c) => -w / 2 + (c + 0.5) * cw),
+      floorY: (f) => f * fh + fh * 0.3 + wh / 2,
+      tops: tops[0],
+      winW: ww * 0.94,
+      winH: wh * 0.94,
+      frontZ: d / 2,
+      paneZ: d / 2 - (t + 0.02),
+      open: { ...open, x0, x1, y0, y1, z: d / 2 - OPENING_DEPTH },
+    }
+  }
+
   const g = new THREE.BufferGeometry()
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
   g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3))
   g.setAttribute('aKind', new THREE.Float32BufferAttribute(kind, 1))
   g.computeBoundingSphere()
-  return { geometry: g, windows, height: n * fh }
+  return { geometry: g, windows, height: n * fh, facade }
 }
 
 const vertex = /* glsl */ `

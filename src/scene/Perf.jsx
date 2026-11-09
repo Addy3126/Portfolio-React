@@ -1,3 +1,4 @@
+import { focus } from '../focus'
 import './threeLog'
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -265,7 +266,9 @@ export function FrameLimiter({ fps }) {
         return
       }
       if (++ticks % 120 === 0) estimate()
-      if (++n % every === 0) invalidate()
+      // While a project's live site is open over the scene, the scene behind it (blurred)
+      // runs at half rate, leaving the machine to the site.
+      if (++n % (focus.stage === 'inside' ? every * 2 : every) === 0) invalidate()
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
